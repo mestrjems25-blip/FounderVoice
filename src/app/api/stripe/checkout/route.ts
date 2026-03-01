@@ -25,11 +25,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             return NextResponse.json({ error: "Invalid tier or missing price ID" }, { status: 400 });
         }
 
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+            ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
         const session = await stripe.checkout.sessions.create({
             mode: "subscription",
             line_items: [{ price: priceId, quantity: 1 }],
-            success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing?success=true`,
-            cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing`,
+            success_url: `${baseUrl}/dashboard/billing?success=true`,
+            cancel_url: `${baseUrl}/dashboard/billing`,
             customer_email: user.email,
             metadata: { userId: user.id, tier },
             client_reference_id: user.id,

@@ -134,6 +134,8 @@ export async function processTranscript(
         // variations = JSON.parse(jsonMatch?.[0] ?? textBlock.text) as PostVariations;
         // ─────────────────────────────────────────────────────────────────────────
 
+        console.log("[processor] Processing with Gemini — userId:", userId, "imageUrl:", imageUrl ?? "none");
+
         const genai = getGenAI();
         const contents: Parameters<typeof genai.models.generateContent>[0]["contents"] = imageUrl
             ? [
@@ -147,14 +149,20 @@ export async function processTranscript(
               ]
             : buildPrompt(voiceStyle, transcript, voiceDna, contextVault);
 
-        const result = await getGenAI().models.generateContent({
-            model: "gemini-2.5-flash-preview-05-20",
-            contents,
-        });
+        try {
+            const result = await getGenAI().models.generateContent({
+                model: "gemini-2.5-flash-preview-05-20",
+                contents,
+            });
 
-        const raw = result.text ?? "";
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        variations = JSON.parse(jsonMatch?.[0] ?? raw) as PostVariations;
+            const raw = result.text ?? "";
+            const jsonMatch = raw.match(/\{[\s\S]*\}/);
+            variations = JSON.parse(jsonMatch?.[0] ?? raw) as PostVariations;
+            console.log("[processor] Gemini response parsed successfully");
+        } catch (err) {
+            console.error("[processor] Gemini generateContent failed:", err);
+            throw err;
+        }
     }
 
     await supabase.from("drafts").insert([
@@ -228,14 +236,21 @@ export async function generateVariation(
         // aiOutput = textBlock.text.trim();
         // ─────────────────────────────────────────────────────────────────────────
 
+        console.log("[processor] generateVariation with Gemini — userId:", userId, "type:", variationType);
+
         const prompt = `${buildPrompt(voiceStyle, transcript, voiceDna, contextVault)}\n\nRewrite this transcript specifically as the "${variationType}" variation, applying this instruction: ${instruction}\n\nReturn ONLY the plain text of the post — no JSON, no labels.`;
 
-        const result = await getGenAI().models.generateContent({
-            model: "gemini-2.5-flash-preview-05-20",
-            contents: prompt,
-        });
-
-        aiOutput = (result.text ?? "").trim();
+        try {
+            const result = await getGenAI().models.generateContent({
+                model: "gemini-2.5-flash-preview-05-20",
+                contents: prompt,
+            });
+            aiOutput = (result.text ?? "").trim();
+            console.log("[processor] generateVariation succeeded");
+        } catch (err) {
+            console.error("[processor] generateVariation Gemini failed:", err);
+            throw err;
+        }
     }
 
     const { data: newDraft, error } = await supabase
