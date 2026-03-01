@@ -6,9 +6,11 @@ import { createServerClient } from "@/lib/supabase/server";
 // const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 // ─────────────────────────────────────────────────────────────────────────────
 
-const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY! });
-
 const MOCK_MODE = process.env.MOCK_MODE === "true";
+
+function getGenAI() {
+    return new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY! });
+}
 
 interface VoiceStyle {
     tone?: string;
@@ -132,6 +134,7 @@ export async function processTranscript(
         // variations = JSON.parse(jsonMatch?.[0] ?? textBlock.text) as PostVariations;
         // ─────────────────────────────────────────────────────────────────────────
 
+        const genai = getGenAI();
         const contents: Parameters<typeof genai.models.generateContent>[0]["contents"] = imageUrl
             ? [
                   {
@@ -144,7 +147,7 @@ export async function processTranscript(
               ]
             : buildPrompt(voiceStyle, transcript, voiceDna, contextVault);
 
-        const result = await genai.models.generateContent({
+        const result = await getGenAI().models.generateContent({
             model: "gemini-2.5-flash-preview-05-20",
             contents,
         });
@@ -227,7 +230,7 @@ export async function generateVariation(
 
         const prompt = `${buildPrompt(voiceStyle, transcript, voiceDna, contextVault)}\n\nRewrite this transcript specifically as the "${variationType}" variation, applying this instruction: ${instruction}\n\nReturn ONLY the plain text of the post — no JSON, no labels.`;
 
-        const result = await genai.models.generateContent({
+        const result = await getGenAI().models.generateContent({
             model: "gemini-2.5-flash-preview-05-20",
             contents: prompt,
         });

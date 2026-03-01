@@ -7,8 +7,6 @@ import { createServerClient } from "@/lib/supabase/server";
 // const { text } = await openai.audio.transcriptions.create({ file, model: "whisper-1", language: "en" });
 // ─────────────────────────────────────────────────────────────────────────────
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
 const MOCK_TRANSCRIPT =
@@ -37,6 +35,7 @@ export async function transcribeAudio(
     const buffer = Buffer.from(await audioResponse.arrayBuffer());
     const audioFile = new File([buffer], "audio.ogg", { type: "audio/ogg" });
 
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const { text } = await groq.audio.transcriptions.create({
         file: audioFile,
         model: "whisper-large-v3-turbo",
