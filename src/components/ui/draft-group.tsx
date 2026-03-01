@@ -64,7 +64,7 @@ function VariationCard({ draft }: { draft: Draft }) {
     const type = draft.variationType ?? "short";
     const style = VARIATION_STYLE[type] ?? VARIATION_STYLE.short;
 
-    const done = status === "published" || status === "scheduled";
+    const done = (["published", "scheduled"] as string[]).includes(status);
 
     return (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
