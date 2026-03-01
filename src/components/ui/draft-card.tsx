@@ -17,7 +17,7 @@ export interface Draft {
     variationType?: string | null;
     sourceAudioUrl?: string | null;
     sourceImageUrl?: string | null;
-    status: "draft" | "pending" | "approved" | "published";
+    status: "draft" | "pending" | "approved" | "published" | "scheduled";
     createdAt: string;
     wordCount: number;
 }

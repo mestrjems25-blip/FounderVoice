@@ -16,7 +16,7 @@ export interface DbDraft {
     variation_type: string | null;
     source_audio_url: string | null;
     source_image_url: string | null;
-    status: "draft" | "pending" | "approved" | "published";
+    status: "draft" | "pending" | "approved" | "published" | "scheduled";
     created_at: string;
     updated_at: string;
 }
