@@ -149,7 +149,7 @@ export async function processTranscript(
             contents,
         });
 
-        const raw = result.response?.text() ?? "";
+        const raw = result.text ?? "";
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         variations = JSON.parse(jsonMatch?.[0] ?? raw) as PostVariations;
     }
@@ -232,7 +232,7 @@ export async function generateVariation(
             contents: prompt,
         });
 
-        aiOutput = (result.response?.text() ?? "").trim();
+        aiOutput = (result.text ?? "").trim();
     }
 
     const { data: newDraft, error } = await supabase

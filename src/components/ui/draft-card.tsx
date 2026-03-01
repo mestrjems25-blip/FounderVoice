@@ -27,6 +27,7 @@ const statusConfig: Record<Draft["status"], { label: string; className: string }
     pending: { label: "Pending Approval", className: "status-pending" },
     approved: { label: "Approved", className: "status-approved" },
     published: { label: "Published", className: "status-published" },
+    scheduled: { label: "Scheduled", className: "status-scheduled" },
 };
 
 const variationLabel: Record<string, string> = {
