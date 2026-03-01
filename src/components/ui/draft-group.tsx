@@ -56,7 +56,7 @@ function SourceBadge({ type }: { type: SourceType }) {
 }
 
 function VariationCard({ draft }: { draft: Draft }) {
-    const [status, setStatus] = useState(draft.status);
+    const [status, setStatus] = useState<"draft" | "pending" | "approved" | "published" | "scheduled">(draft.status);
     const [isPending, startTransition] = useTransition();
     const [isScheduling, startScheduleTransition] = useTransition();
     const [showSchedule, setShowSchedule] = useState(false);
