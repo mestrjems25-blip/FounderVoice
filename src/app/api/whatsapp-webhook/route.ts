@@ -254,8 +254,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Derive the canonical webhook URL from the request itself so it always
     // matches what Twilio signed, regardless of whether APP_URL is set.
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
-    const webhookUrl = `https://${host}/api/whatsapp-webhook`;
+    const proto = request.headers.get("x-forwarded-proto") ?? "https";
+    const host = request.headers.get("host") ?? "";
+    const webhookUrl = `${proto}://${host}${request.nextUrl.pathname}`;
 
     const formData = await request.formData();
     const params = Object.fromEntries(formData) as Record<string, string>;
