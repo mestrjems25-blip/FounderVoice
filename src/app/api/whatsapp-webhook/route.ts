@@ -257,8 +257,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const params = Object.fromEntries(formData) as Record<string, string>;
 
     console.log("[webhook] Incoming WhatsApp payload:", JSON.stringify(params));
+    console.log(`[webhook] MOCK_MODE=${MOCK_MODE} | APP_URL=${APP_URL} | webhookUrl=${webhookUrl} | sig=${signature.slice(0, 12)}...`);
 
     if (!MOCK_MODE && !validateTwilioSignature(AUTH_TOKEN, signature, webhookUrl, params)) {
+        console.error(`[webhook] Signature validation FAILED — webhookUrl used: ${webhookUrl}`);
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
