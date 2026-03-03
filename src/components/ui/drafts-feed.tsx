@@ -124,7 +124,7 @@ export function DraftsFeed({ initialDrafts, userId }: DraftsFeedProps) {
                     </p>
                 </div>
                 <a
-                    href="https://wa.me/14155238886"
+                    href={`https://wa.me/${(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "14155238886").replace(/\D/g, "")}?text=Hi`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shrink-0 transition-opacity hover:opacity-90"
