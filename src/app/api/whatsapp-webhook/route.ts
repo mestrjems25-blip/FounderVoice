@@ -46,23 +46,36 @@ async function handleNewUser(from: string, supabase: ReturnType<typeof createSer
 
     console.log(`[pipeline] handleNewUser — email: ${syntheticEmail} | SERVICE_ROLE set: ${!!process.env.SUPABASE_SERVICE_ROLE_KEY}`);
 
+    let resolvedUserId: string | null = null;
+
     const { data: authData, error: createUserError } = await supabase.auth.admin.createUser({
         email: syntheticEmail,
         email_confirm: true,
         user_metadata: { phone_number: cleanPhone },
     });
 
-    if (createUserError) {
-        console.error(`[pipeline] createUser error:`, createUserError.message);
+    if (authData?.user) {
+        resolvedUserId = authData.user.id;
+    } else {
+        console.error(`[pipeline] createUser error:`, createUserError?.message);
+
+        // Ghost user: email already exists in Auth but not in profiles.
+        // Find the existing auth user and link their profile.
+        const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        const existing = listData?.users?.find((u) => u.email === syntheticEmail);
+        if (existing) {
+            console.log(`[pipeline] Ghost user resolved: ${existing.id} — linking profile`);
+            resolvedUserId = existing.id;
+        }
     }
 
-    if (!authData?.user) {
-        console.error(`[pipeline] handleNewUser — createUser returned no user for ${cleanPhone}`);
+    if (!resolvedUserId) {
+        console.error(`[pipeline] handleNewUser — could not resolve user for ${cleanPhone}`);
         return;
     }
 
     const { error: upsertError } = await supabase.from("profiles").upsert({
-        id: authData.user.id,
+        id: resolvedUserId,
         phone_number: cleanPhone,
         whatsapp_sync_token: token,
         whatsapp_sync_expires_at: expiresAt,
@@ -71,13 +84,14 @@ async function handleNewUser(from: string, supabase: ReturnType<typeof createSer
 
     if (upsertError) {
         console.error(`[pipeline] profiles upsert error:`, upsertError.message);
+        return;
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `https://foundervoice-lovat.vercel.app`;
     const syncLink = `${baseUrl}/api/auth/whatsapp-sync?token=${token}`;
     const welcome = `Welcome to FounderVoice! Tap here to sync your account and set up your Voice DNA: ${syncLink}\n\nOnce synced, just send me a voice note, text, or photo and I'll write your next LinkedIn post.`;
 
-    console.log(`[pipeline] New user registered: ${authData.user.id} | phone: ${cleanPhone}`);
+    console.log(`[pipeline] New user registered: ${resolvedUserId} | phone: ${cleanPhone}`);
 
     if (MOCK_MODE) {
         console.log(`[pipeline] New user ${cleanPhone} — would send: "${welcome}"`);
