@@ -251,13 +251,17 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     const signature = request.headers.get("x-twilio-signature") ?? "";
-    const webhookUrl = `${APP_URL}/api/whatsapp-webhook`;
+
+    // Derive the canonical webhook URL from the request itself so it always
+    // matches what Twilio signed, regardless of whether APP_URL is set.
+    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
+    const webhookUrl = `https://${host}/api/whatsapp-webhook`;
 
     const formData = await request.formData();
     const params = Object.fromEntries(formData) as Record<string, string>;
 
     console.log("[webhook] Incoming WhatsApp payload:", JSON.stringify(params));
-    console.log(`[webhook] MOCK_MODE=${MOCK_MODE} | APP_URL=${APP_URL} | webhookUrl=${webhookUrl} | sig=${signature.slice(0, 12)}...`);
+    console.log(`[webhook] MOCK_MODE=${MOCK_MODE} | webhookUrl=${webhookUrl} | sig=${signature.slice(0, 12)}...`);
 
     if (!MOCK_MODE && !validateTwilioSignature(AUTH_TOKEN, signature, webhookUrl, params)) {
         console.error(`[webhook] Signature validation FAILED — webhookUrl used: ${webhookUrl}`);
