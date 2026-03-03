@@ -44,25 +44,34 @@ async function handleNewUser(from: string, supabase: ReturnType<typeof createSer
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
-    // Create Supabase auth user (idempotent — won't error if already exists)
-    const { data: authData } = await supabase.auth.admin.createUser({
+    console.log(`[pipeline] handleNewUser — email: ${syntheticEmail} | SERVICE_ROLE set: ${!!process.env.SUPABASE_SERVICE_ROLE_KEY}`);
+
+    const { data: authData, error: createUserError } = await supabase.auth.admin.createUser({
         email: syntheticEmail,
         email_confirm: true,
         user_metadata: { phone_number: cleanPhone },
     });
 
+    if (createUserError) {
+        console.error(`[pipeline] createUser error:`, createUserError.message);
+    }
+
     if (!authData?.user) {
-        console.warn(`[pipeline] handleNewUser — createUser returned no user for ${cleanPhone}`);
+        console.error(`[pipeline] handleNewUser — createUser returned no user for ${cleanPhone}`);
         return;
     }
 
-    await supabase.from("profiles").upsert({
+    const { error: upsertError } = await supabase.from("profiles").upsert({
         id: authData.user.id,
         phone_number: cleanPhone,
         whatsapp_sync_token: token,
         whatsapp_sync_expires_at: expiresAt,
         updated_at: new Date().toISOString(),
     });
+
+    if (upsertError) {
+        console.error(`[pipeline] profiles upsert error:`, upsertError.message);
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `https://foundervoice-lovat.vercel.app`;
     const syncLink = `${baseUrl}/api/auth/whatsapp-sync?token=${token}`;
