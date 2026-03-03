@@ -83,7 +83,7 @@ async function handleNewUser(from: string, supabase: ReturnType<typeof createSer
     });
 
     if (upsertError) {
-        console.error(`[pipeline] profiles upsert error:`, upsertError.message);
+        console.error(`[pipeline] profiles upsert error — code: ${upsertError.code} | msg: ${upsertError.message} | details: ${upsertError.details}`);
         return;
     }
 

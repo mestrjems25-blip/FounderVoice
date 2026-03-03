@@ -13,5 +13,6 @@ export function createServerClient() {
             autoRefreshToken: false,
             persistSession: false,
         },
+        db: { schema: "public" },
     });
 }
