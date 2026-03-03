@@ -9,7 +9,7 @@ import { processTranscript } from "@/lib/ai/processor";
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!;
-const WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER!;
+const WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER ?? "+14155238886";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
@@ -64,15 +64,22 @@ async function handleNewUser(from: string, supabase: ReturnType<typeof createSer
         updated_at: new Date().toISOString(),
     });
 
-    const syncLink = `${APP_URL}/api/auth/whatsapp-sync?token=${token}`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `https://foundervoice-lovat.vercel.app`;
+    const syncLink = `${baseUrl}/api/auth/whatsapp-sync?token=${token}`;
     const welcome = `Welcome to FounderVoice! Tap here to sync your account and set up your Voice DNA: ${syncLink}\n\nOnce synced, just send me a voice note, text, or photo and I'll write your next LinkedIn post.`;
+
+    console.log(`[pipeline] New user registered: ${authData.user.id} | phone: ${cleanPhone}`);
 
     if (MOCK_MODE) {
         console.log(`[pipeline] New user ${cleanPhone} — would send: "${welcome}"`);
     } else {
-        await sendWhatsAppMessage(from, welcome);
+        try {
+            await sendWhatsAppMessage(from, welcome);
+            console.log(`[pipeline] Welcome message sent to ${from}`);
+        } catch (err) {
+            console.error(`[pipeline] Welcome message failed (registration still succeeded):`, err);
+        }
     }
-    console.log(`[pipeline] New user registered: ${authData.user.id} | phone: ${cleanPhone}`);
 }
 
 type InputType = "audio" | "text" | "image";
