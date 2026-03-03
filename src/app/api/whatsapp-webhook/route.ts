@@ -10,8 +10,11 @@ import { processTranscript } from "@/lib/ai/processor";
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!;
 const WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER ?? "+14155238886";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://foundervoice-lovat.vercel.app";
 const MOCK_MODE = process.env.MOCK_MODE === "true";
+
+// Matches "LINK:<uuid>" messages sent via the dashboard Connect WhatsApp flow
+const LINK_RE = /^LINK:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 async function downloadTwilioMedia(mediaUrl: string): Promise<Buffer> {
     const credentials = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString("base64");
@@ -38,71 +41,63 @@ async function resizeImage(buffer: Buffer): Promise<Buffer> {
 
 const DAILY_LIMIT = 10;
 
-async function handleNewUser(from: string, supabase: ReturnType<typeof createServerClient>): Promise<void> {
+/**
+ * Handles the "LINK:<token>" message users send to connect their WhatsApp number.
+ * Returns true if the message matched the link pattern (handled), false if not.
+ */
+async function handleLinkMessage(
+    body: string,
+    from: string,
+    supabase: ReturnType<typeof createServerClient>
+): Promise<boolean> {
+    const match = body.trim().match(LINK_RE);
+    if (!match) return false;
+
+    const token = match[1];
     const cleanPhone = from.replace(/^whatsapp:/, "");
-    const syntheticEmail = `wa_${cleanPhone.replace(/\D/g, "")}@foundervoice.app`;
-    const token = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
-    console.log(`[pipeline] handleNewUser — email: ${syntheticEmail} | SERVICE_ROLE set: ${!!process.env.SUPABASE_SERVICE_ROLE_KEY}`);
+    const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, whatsapp_sync_expires_at")
+        .eq("whatsapp_sync_token", token)
+        .single();
 
-    let resolvedUserId: string | null = null;
-
-    const { data: authData, error: createUserError } = await supabase.auth.admin.createUser({
-        email: syntheticEmail,
-        email_confirm: true,
-        user_metadata: { phone_number: cleanPhone },
-    });
-
-    if (authData?.user) {
-        resolvedUserId = authData.user.id;
-    } else {
-        console.error(`[pipeline] createUser error:`, createUserError?.message);
-
-        // Ghost user: email already exists in Auth but not in profiles.
-        // Find the existing auth user and link their profile.
-        const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-        const existing = listData?.users?.find((u) => u.email === syntheticEmail);
-        if (existing) {
-            console.log(`[pipeline] Ghost user resolved: ${existing.id} — linking profile`);
-            resolvedUserId = existing.id;
-        }
+    if (!profile) {
+        await sendWhatsAppMessage(from, "This link is invalid or has already been used. Generate a new one from Settings in your dashboard.");
+        return true;
     }
 
-    if (!resolvedUserId) {
-        console.error(`[pipeline] handleNewUser — could not resolve user for ${cleanPhone}`);
-        return;
+    const expired = profile.whatsapp_sync_expires_at
+        ? new Date(profile.whatsapp_sync_expires_at) < new Date()
+        : true;
+
+    if (expired) {
+        await sendWhatsAppMessage(from, "This link has expired (30-min window). Generate a new one from Settings in your dashboard.");
+        return true;
     }
 
-    const { error: upsertError } = await supabase.from("profiles").upsert({
-        id: resolvedUserId,
-        phone_number: cleanPhone,
-        whatsapp_sync_token: token,
-        whatsapp_sync_expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-    });
+    const { error } = await supabase
+        .from("profiles")
+        .update({
+            phone_number: cleanPhone,
+            whatsapp_sync_token: null,
+            whatsapp_sync_expires_at: null,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", profile.id);
 
-    if (upsertError) {
-        console.error(`[pipeline] profiles upsert error — code: ${upsertError.code} | msg: ${upsertError.message} | details: ${upsertError.details}`);
-        return;
+    if (error) {
+        console.error(`[pipeline] WhatsApp link update failed:`, error);
+        await sendWhatsAppMessage(from, "Something went wrong linking your account. Please try again.");
+        return true;
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `https://foundervoice-lovat.vercel.app`;
-    const syncLink = `${baseUrl}/api/auth/whatsapp-sync?token=${token}`;
-    const welcome = `Welcome to FounderVoice! Tap here to sync your account and set up your Voice DNA: ${syncLink}\n\nOnce synced, just send me a voice note, text, or photo and I'll write your next LinkedIn post.`;
-
-    console.log(`[pipeline] New user registered: ${resolvedUserId} | phone: ${cleanPhone}`);
-
-    if (MOCK_MODE) {
-        console.log(`[pipeline] New user ${cleanPhone} — would send: "${welcome}"`);
-    } else {
-        try {
-            await sendWhatsAppMessage(from, welcome);
-            console.log(`[pipeline] Welcome message sent to ${from}`);
-        } catch (err) {
-            console.error(`[pipeline] Welcome message failed (registration still succeeded):`, err);
-        }
-    }
+    console.log(`[pipeline] WhatsApp linked — profileId: ${profile.id} | phone: ${cleanPhone}`);
+    await sendWhatsAppMessage(
+        from,
+        `WhatsApp connected! Send me a voice note, text, or photo and I'll write your next LinkedIn post. View drafts at ${APP_URL}/dashboard`
+    );
+    return true;
 }
 
 type InputType = "audio" | "text" | "image";
@@ -114,13 +109,21 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
     console.log(`[pipeline] START — From: ${From} | MOCK_MODE: ${MOCK_MODE}`);
 
     const userId = await getUserByPhone(From);
-    console.log(`[pipeline] getUserByPhone → userId: ${userId ?? "NULL (unregistered)"}`);
+    console.log(`[pipeline] getUserByPhone → userId: ${userId ?? "NULL (unlinked)"}`);
 
     const supabase = createServerClient();
 
     if (!userId) {
-        console.warn(`[pipeline] No profile matches phone: ${From} — triggering new user registration`);
-        await handleNewUser(From, supabase);
+        // Check if they're sending a link token from the dashboard Connect WhatsApp flow
+        if (Body) {
+            const handled = await handleLinkMessage(Body, From, supabase);
+            if (handled) return;
+        }
+        await sendWhatsAppMessage(
+            From,
+            `To use FounderVoice, sign up at ${APP_URL} then go to Settings › Connect WhatsApp to link this number.`
+        );
+        console.log(`[pipeline] Unlinked number ${From} — sent registration instructions`);
         return;
     }
 

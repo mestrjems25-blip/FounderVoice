@@ -173,3 +173,42 @@ export async function deleteAccount(): Promise<void> {
 
     redirect("/");
 }
+
+export async function generateWhatsAppLink(): Promise<string> {
+    const supabase = await createSessionClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+    await supabase
+        .from("profiles")
+        .update({
+            whatsapp_sync_token: token,
+            whatsapp_sync_expires_at: expiresAt,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+    const waNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "14155238886").replace(/\D/g, "");
+    return `https://wa.me/${waNumber}?text=${encodeURIComponent(`LINK:${token}`)}`;
+}
+
+export async function disconnectWhatsApp(): Promise<void> {
+    const supabase = await createSessionClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    await supabase
+        .from("profiles")
+        .update({
+            phone_number: null,
+            whatsapp_sync_token: null,
+            whatsapp_sync_expires_at: null,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+    revalidatePath("/dashboard/settings");
+}

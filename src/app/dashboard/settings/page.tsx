@@ -9,13 +9,14 @@ export default async function SettingsPage() {
 
     const { data: profile } = await supabase
         .from("profiles")
-        .select("whatsapp_notifications")
+        .select("whatsapp_notifications, phone_number")
         .eq("id", user.id)
         .single();
 
     return (
         <SettingsClient
             whatsappNotifications={profile?.whatsapp_notifications ?? true}
+            phoneNumber={profile?.phone_number ?? null}
         />
     );
 }
