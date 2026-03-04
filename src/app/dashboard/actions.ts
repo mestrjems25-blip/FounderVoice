@@ -212,6 +212,15 @@ export async function disconnectWhatsApp(): Promise<void> {
     revalidatePath("/dashboard/settings");
 }
 
+export async function refreshSocialStatus(): Promise<{ linkedin: boolean; x: boolean }> {
+    const supabase = await createSessionClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !process.env.UPLOAD_POST_API_KEY) return { linkedin: false, x: false };
+
+    const { getConnectedPlatforms } = await import("@/lib/social/client");
+    return getConnectedPlatforms(user.id).catch(() => ({ linkedin: false, x: false }));
+}
+
 export async function disconnectBuffer(): Promise<void> {
     const supabase = await createSessionClient();
     const { data: { user } } = await supabase.auth.getUser();

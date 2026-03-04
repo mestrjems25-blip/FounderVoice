@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Bell, CheckCircle2, Linkedin, MessageCircle, RefreshCw, Trash2, Unlink, Zap } from "lucide-react";
 import {
@@ -8,6 +8,7 @@ import {
     deleteAllData,
     disconnectWhatsApp,
     generateWhatsAppLink,
+    refreshSocialStatus,
     updateSettings,
 } from "@/app/dashboard/actions";
 
@@ -87,27 +88,42 @@ export function SettingsClient({
     const [xConnected, setXConnected] = useState(initialX);
     const [socialToast, setSocialToast] = useState<"connected" | "error" | undefined>(socialStatus);
     const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [confirmDisconnect, setConfirmDisconnect] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmWipe, setConfirmWipe] = useState(false);
     const [isPending, startTransition] = useTransition();
 
+    function clearPoll() {
+        if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    }
+
     const handleSocialMessage = useCallback((e: MessageEvent<{ type?: string }>) => {
         if (e.data?.type === "social-connected") {
+            clearPoll();
             setLinkedinConnected(true);
             setXConnected(true);
             setSocialToast("connected");
             setConnectingPlatform(null);
         }
         if (e.data?.type === "social-error") {
+            clearPoll();
             setSocialToast("error");
             setConnectingPlatform(null);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
         window.addEventListener("message", handleSocialMessage);
-        return () => window.removeEventListener("message", handleSocialMessage);
+        return () => {
+            window.removeEventListener("message", handleSocialMessage);
+            clearPoll();
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [handleSocialMessage]);
 
     function connectSocial(platforms: string) {
@@ -118,9 +134,21 @@ export function SettingsClient({
             "width=600,height=700,left=200,top=100,toolbar=0,menubar=0,location=0"
         );
         if (!popup) {
-            // Popup blocked — fall back to full-page redirect
             window.location.href = `/api/auth/social/connect?platforms=${platforms}`;
+            return;
         }
+
+        // Fallback: poll for popup close in case postMessage never fires (popup blocked, mobile, etc.)
+        pollRef.current = setInterval(async () => {
+            if (popup.closed) {
+                clearPoll();
+                setConnectingPlatform(null);
+                const status = await refreshSocialStatus();
+                if (status.linkedin) setLinkedinConnected(true);
+                if (status.x) setXConnected(true);
+                if (status.linkedin || status.x) setSocialToast("connected");
+            }
+        }, 600);
     }
 
     function handleWhatsappToggle(v: boolean) {
@@ -195,7 +223,7 @@ export function SettingsClient({
                         style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}
                     >
                         <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-                        <p className="text-sm text-green-300">Account connected — drafts will now publish directly from your dashboard.</p>
+                        <p className="text-sm text-green-300">Success! Your accounts are linked — drafts will now publish directly from your dashboard.</p>
                     </motion.div>
                 )}
                 {socialToast === "error" && (

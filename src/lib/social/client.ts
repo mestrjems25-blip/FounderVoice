@@ -160,9 +160,11 @@ export async function postText(
 }
 
 // Strip AI preamble and meta-talk from a post before sending to social platforms.
-// Handles patterns like "Here's a post:", separator lines, and blank preambles.
 export function cleanPostText(text: string): string {
-    const lines = text.split("\n");
+    // Remove inline AI placeholders like [Your name] or [Insert statistic here]
+    let cleaned = text.replace(/\[[^\]]*\]/g, "").replace(/  +/g, " ");
+
+    const lines = cleaned.split("\n");
     let startIdx = 0;
 
     for (let i = 0; i < lines.length; i++) {
@@ -172,8 +174,13 @@ export function cleanPostText(text: string): string {
             startIdx = i + 1;
             continue;
         }
-        // Skip short meta-label lines ending with ":" e.g. "Here's a post:" / "Post:"
-        if (i === startIdx && line.length < 80 && line.endsWith(":") && !line.includes("\n")) {
+        // Skip "Here is / Here's / Draft: / Post:" meta-prefixes
+        if (i === startIdx && /^(here (is|are|'?s)|draft[:\s]|post[:\s])/i.test(line)) {
+            startIdx = i + 1;
+            continue;
+        }
+        // Skip short lines ending with ":" (e.g. "LinkedIn post:")
+        if (i === startIdx && line.length < 80 && line.endsWith(":")) {
             startIdx = i + 1;
             continue;
         }
