@@ -1,6 +1,7 @@
 import { createSessionClient } from "@/lib/supabase/session";
 import { TRIAL_DAYS } from "@/lib/trial";
-import { BarChart3, FileText, Lock, Mic, TrendingUp, Zap } from "lucide-react";
+import { getAnalytics, getConnectedPlatforms } from "@/lib/social/client";
+import { BarChart3, FileText, Lock, Mic, TrendingUp, Users, Zap } from "lucide-react";
 import Link from "next/link";
 
 interface StatCardProps {
@@ -90,7 +91,7 @@ export default async function AnalyticsPage() {
 
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const [{ data: drafts }, { count: voiceCount }, { data: profile }] = await Promise.all([
+    const [{ data: drafts }, { count: voiceCount }, { data: profile }, connectedPlatforms] = await Promise.all([
         supabase
             .from("drafts")
             .select("variation_type, status, created_at")
@@ -104,7 +105,17 @@ export default async function AnalyticsPage() {
             .select("subscription_tier, trial_started_at")
             .eq("id", user.id)
             .single(),
+        process.env.UPLOAD_POST_API_KEY
+            ? getConnectedPlatforms(user.id).catch(() => ({ x: false, linkedin: false }))
+            : Promise.resolve({ x: false, linkedin: false }),
     ]);
+
+    const activePlatforms = (["linkedin", "x"] as const).filter(
+        (p) => connectedPlatforms[p]
+    );
+    const socialAnalytics = activePlatforms.length && process.env.UPLOAD_POST_API_KEY
+        ? await getAnalytics(user.id, activePlatforms).catch(() => ({}))
+        : {};
 
     const tier = (profile?.subscription_tier ?? "trial") as string;
     const isBasic = tier === "basic";
@@ -269,6 +280,67 @@ export default async function AnalyticsPage() {
                     >
                         <Zap className="w-4 h-4" />
                         Upgrade to Pro — $49/mo
+                    </Link>
+                </div>
+            )}
+
+            {/* Social Performance — real data from Upload-Post */}
+            {activePlatforms.length > 0 ? (
+                <div className="glass-card rounded-2xl p-6 flex flex-col gap-5">
+                    <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-[#818cf8]" />
+                        <p className="text-sm font-semibold text-white">Social Performance</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {activePlatforms.map((platform) => {
+                            const stats = (socialAnalytics as Record<string, { followers?: number; impressions?: number; reach?: number; likes?: number; comments?: number; shares?: number }>)[platform] ?? {};
+                            const label = platform === "x" ? "X (Twitter)" : "LinkedIn";
+                            const accent = platform === "x" ? "#e2e8f0" : "#0a66c2";
+                            return (
+                                <div
+                                    key={platform}
+                                    className="rounded-xl p-4 flex flex-col gap-3"
+                                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                                >
+                                    <p className="text-xs font-semibold text-white/60 uppercase tracking-widest">{label}</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {[
+                                            { label: "Followers", value: stats.followers },
+                                            { label: "Impressions", value: stats.impressions },
+                                            { label: "Likes", value: stats.likes },
+                                            { label: "Comments", value: stats.comments },
+                                        ].map(({ label: l, value }) => (
+                                            <div key={l}>
+                                                <p className="text-lg font-bold text-white">{value != null ? value.toLocaleString() : "—"}</p>
+                                                <p className="text-[10px] text-white/30 mt-0.5">{l}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {stats.reach != null && (
+                                        <p className="text-xs text-white/30 border-t border-white/5 pt-2">
+                                            Reach: {stats.reach.toLocaleString()}
+                                        </p>
+                                    )}
+                                    <div style={{ display: "none" }}>{accent}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            ) : (
+                <div
+                    className="rounded-2xl p-6 flex flex-col gap-3 text-center"
+                    style={{ background: "rgba(99,102,241,0.04)", border: "1px solid rgba(99,102,241,0.12)" }}
+                >
+                    <p className="text-sm font-semibold text-white">No social accounts connected</p>
+                    <p className="text-xs text-white/40">Connect LinkedIn or X in Settings to see real engagement data here.</p>
+                    <Link
+                        href="/dashboard/settings"
+                        className="inline-flex items-center gap-2 mx-auto text-xs font-medium px-5 py-2 rounded-xl mt-1"
+                        style={{ background: "rgba(99,102,241,0.15)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.25)" }}
+                    >
+                        Connect accounts →
                     </Link>
                 </div>
             )}

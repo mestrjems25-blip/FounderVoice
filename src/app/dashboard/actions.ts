@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSessionClient } from "@/lib/supabase/session";
 import { createServerClient } from "@/lib/supabase/server";
-import { getChannels, createPost } from "@/lib/buffer/client";
+import { postText } from "@/lib/social/client";
 
 export interface VoiceStyle {
     tone?: "professional" | "casual" | "provocative" | "inspirational";
@@ -18,24 +18,21 @@ export async function publishDraft(draftId: string, scheduledAt?: string): Promi
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    const [{ data: draft }, { data: profile }] = await Promise.all([
-        supabase.from("drafts").select("ai_output, variation_type").eq("id", draftId).eq("user_id", user.id).single(),
-        supabase.from("profiles").select("buffer_access_token").eq("id", user.id).single(),
-    ]);
+    const { data: draft } = await supabase
+        .from("drafts")
+        .select("ai_output, variation_type")
+        .eq("id", draftId)
+        .eq("user_id", user.id)
+        .single();
 
     if (!draft) throw new Error("Draft not found");
 
-    const accessToken = (profile?.buffer_access_token as string | null) ?? undefined;
-    const hasBuffer = accessToken || process.env.BUFFER_API_KEY;
-
-    if (hasBuffer) {
-        let channelId = process.env.BUFFER_LINKEDIN_CHANNEL_ID;
-        if (!channelId) {
-            const channels = await getChannels(accessToken);
-            const target = channels.find((c) => c.service === "linkedin") ?? channels[0];
-            channelId = target?.id;
+    if (process.env.UPLOAD_POST_API_KEY) {
+        try {
+            await postText(user.id, draft.ai_output, ["linkedin"], scheduledAt);
+        } catch (err) {
+            console.error("[publishDraft] Upload-Post failed:", err);
         }
-        if (channelId) await createPost(channelId, draft.ai_output, scheduledAt, accessToken);
     }
 
     await supabase

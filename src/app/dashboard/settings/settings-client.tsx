@@ -6,7 +6,6 @@ import { AlertTriangle, Bell, CheckCircle2, Linkedin, MessageCircle, RefreshCw, 
 import {
     deleteAccount,
     deleteAllData,
-    disconnectBuffer,
     disconnectWhatsApp,
     generateWhatsAppLink,
     updateSettings,
@@ -65,8 +64,9 @@ interface Props {
     phoneNumber: string | null;
     verificationToken: string;
     waLink: string;
-    bufferConnected: boolean;
-    bufferStatus?: "connected" | "error";
+    linkedinConnected: boolean;
+    xConnected: boolean;
+    socialStatus?: "connected" | "error";
 }
 
 export function SettingsClient({
@@ -74,17 +74,16 @@ export function SettingsClient({
     phoneNumber: initialPhone,
     verificationToken: initialToken,
     waLink: initialWaLink,
-    bufferConnected: initialBufferConnected,
-    bufferStatus,
+    linkedinConnected,
+    xConnected,
+    socialStatus,
 }: Props) {
     const [whatsapp, setWhatsapp] = useState(initialWhatsapp);
     const [autoPublish, setAutoPublish] = useState(false);
     const [phone, setPhone] = useState<string | null>(initialPhone);
     const [waLink, setWaLink] = useState(initialWaLink);
     const [token, setToken] = useState(initialToken);
-    const [bufferConnected, setBufferConnected] = useState(initialBufferConnected);
     const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-    const [confirmBufferDisconnect, setConfirmBufferDisconnect] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmWipe, setConfirmWipe] = useState(false);
     const [isPending, startTransition] = useTransition();
@@ -122,18 +121,6 @@ export function SettingsClient({
         });
     }
 
-    function handleBufferDisconnect() {
-        if (!confirmBufferDisconnect) {
-            setConfirmBufferDisconnect(true);
-            return;
-        }
-        startTransition(async () => {
-            await disconnectBuffer();
-            setBufferConnected(false);
-            setConfirmBufferDisconnect(false);
-        });
-    }
-
     function handleDeleteAll() {
         if (!confirmWipe) {
             setConfirmWipe(true);
@@ -162,9 +149,9 @@ export function SettingsClient({
                 <p className="text-sm text-gray-500 mt-1">Preferences and account controls.</p>
             </div>
 
-            {/* Buffer OAuth status toast */}
+            {/* Social connection status toast */}
             <AnimatePresence>
-                {bufferStatus === "connected" && (
+                {socialStatus === "connected" && (
                     <motion.div
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -173,10 +160,10 @@ export function SettingsClient({
                         style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}
                     >
                         <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-                        <p className="text-sm text-green-300">Buffer connected — your posts will now publish directly to your social accounts.</p>
+                        <p className="text-sm text-green-300">Social accounts connected — drafts will now publish directly from your dashboard.</p>
                     </motion.div>
                 )}
-                {bufferStatus === "error" && (
+                {socialStatus === "error" && (
                     <motion.div
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -185,7 +172,7 @@ export function SettingsClient({
                         style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)" }}
                     >
                         <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-                        <p className="text-sm text-red-300">Buffer connection failed. Make sure you approved access and try again.</p>
+                        <p className="text-sm text-red-300">Connection failed. Make sure you approved access and try again.</p>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -268,66 +255,64 @@ export function SettingsClient({
             </div>
 
             {/* Social Accounts */}
-            <div className="glass-card rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-5">
+            <div className="glass-card rounded-2xl p-6 flex flex-col gap-5">
+                <div className="flex items-center gap-2">
                     <Linkedin className="w-4 h-4 text-[#818cf8]" />
                     <p className="text-sm font-semibold text-white">Social Accounts</p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* LinkedIn row */}
+                <div className="flex items-center justify-between py-3 border-b border-white/5">
                     <div>
                         <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-white">Buffer</p>
-                            {bufferConnected && (
+                            <p className="text-sm font-medium text-white">LinkedIn</p>
+                            {linkedinConnected && (
                                 <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                                     Connected
                                 </span>
                             )}
                         </div>
-                        <p className="text-xs text-white/40 mt-0.5">
-                            {bufferConnected
-                                ? "Publishing to LinkedIn and X is active via your Buffer account."
-                                : "Connect Buffer to publish drafts directly to LinkedIn and X."}
-                        </p>
+                        <p className="text-xs text-white/40 mt-0.5">Publish drafts directly to your LinkedIn profile.</p>
                     </div>
+                    <a
+                        href="/api/auth/social/connect?platforms=linkedin"
+                        className="text-xs px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-1.5 shrink-0"
+                        style={{
+                            background: linkedinConnected ? "rgba(34,197,94,0.08)" : "rgba(99,102,241,0.12)",
+                            color: linkedinConnected ? "#4ade80" : "#818cf8",
+                            border: `1px solid ${linkedinConnected ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)"}`,
+                        }}
+                    >
+                        {linkedinConnected ? "Reconnect" : "Connect"}
+                    </a>
+                </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                        {bufferConnected ? (
-                            <>
-                                {confirmBufferDisconnect && !isPending && (
-                                    <motion.button
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        onClick={() => setConfirmBufferDisconnect(false)}
-                                        className="text-xs px-3 py-2 rounded-lg bg-white/5 text-white/50 hover:bg-white/10 transition-colors"
-                                    >
-                                        Cancel
-                                    </motion.button>
-                                )}
-                                <button
-                                    onClick={handleBufferDisconnect}
-                                    disabled={isPending}
-                                    className="text-xs px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 text-white/50 bg-white/5 border border-white/10 hover:bg-white/10"
-                                >
-                                    <Unlink className="w-3 h-3" />
-                                    {isPending ? "Disconnecting…" : confirmBufferDisconnect ? "Yes, disconnect" : "Disconnect"}
-                                </button>
-                            </>
-                        ) : (
-                            <a
-                                href="/api/auth/buffer"
-                                className="text-xs px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-1.5"
-                                style={{
-                                    background: "rgba(99,102,241,0.12)",
-                                    color: "#818cf8",
-                                    border: "1px solid rgba(99,102,241,0.2)",
-                                }}
-                            >
-                                Connect Buffer
-                            </a>
-                        )}
+                {/* X row */}
+                <div className="flex items-center justify-between py-3">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-white">X (Twitter)</p>
+                            {xConnected && (
+                                <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                    Connected
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-xs text-white/40 mt-0.5">Publish threads and posts directly to X.</p>
                     </div>
+                    <a
+                        href="/api/auth/social/connect?platforms=x"
+                        className="text-xs px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-1.5 shrink-0"
+                        style={{
+                            background: xConnected ? "rgba(34,197,94,0.08)" : "rgba(99,102,241,0.12)",
+                            color: xConnected ? "#4ade80" : "#818cf8",
+                            border: `1px solid ${xConnected ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)"}`,
+                        }}
+                    >
+                        {xConnected ? "Reconnect" : "Connect"}
+                    </a>
                 </div>
             </div>
 

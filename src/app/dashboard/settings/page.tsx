@@ -1,10 +1,11 @@
 import { randomBytes } from "crypto";
 import { createSessionClient } from "@/lib/supabase/session";
 import { createServerClient } from "@/lib/supabase/server";
+import { getConnectedPlatforms } from "@/lib/social/client";
 import { SettingsClient } from "./settings-client";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ buffer?: string }> }) {
-    const { buffer: bufferParam } = await searchParams;
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ social?: string }> }) {
+    const { social: socialParam } = await searchParams;
     const supabase = await createSessionClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -12,12 +13,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
     let { data: profile } = await supabase
         .from("profiles")
-        .select("whatsapp_notifications, phone_number, whatsapp_sync_token, buffer_access_token")
+        .select("whatsapp_notifications, phone_number, whatsapp_sync_token")
         .eq("id", user.id)
         .single();
 
-    // Auto-generate a verification code if the user doesn't have one yet.
-    // Use the service-role client to guarantee the write succeeds regardless of RLS.
     if (!profile?.whatsapp_sync_token) {
         const token = randomBytes(3).toString("hex");
         const admin = createServerClient();
@@ -27,8 +26,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
         if (tokenError) {
             console.error("[settings] Failed to save verification token:", tokenError.message);
-        } else {
-            console.log(`[settings] Verification token generated for ${user.id}: ${token}`);
         }
         profile = { ...profile, whatsapp_sync_token: token } as typeof profile;
     }
@@ -37,14 +34,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     const waNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "14155238886").replace(/\D/g, "");
     const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(`Verify my account: ${verificationToken}`)}`;
 
+    const connectedPlatforms = process.env.UPLOAD_POST_API_KEY
+        ? await getConnectedPlatforms(user.id).catch(() => ({ x: false, linkedin: false }))
+        : { x: false, linkedin: false };
+
     return (
         <SettingsClient
             whatsappNotifications={profile?.whatsapp_notifications ?? true}
             phoneNumber={profile?.phone_number ?? null}
             verificationToken={verificationToken}
             waLink={waLink}
-            bufferConnected={!!profile?.buffer_access_token}
-            bufferStatus={bufferParam === "connected" ? "connected" : bufferParam === "error" ? "error" : undefined}
+            linkedinConnected={connectedPlatforms.linkedin}
+            xConnected={connectedPlatforms.x}
+            socialStatus={socialParam === "connected" ? "connected" : socialParam === "error" ? "error" : undefined}
         />
     );
 }
