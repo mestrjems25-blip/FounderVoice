@@ -12,6 +12,7 @@ const GEMINI_MODEL = "gemini-1.5-flash";
 
 function getGenAI() {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    console.log("[Gemini Init] Key found:", !!apiKey);
     if (!apiKey) throw new Error("[processor] GOOGLE_GENERATIVE_AI_API_KEY is not set in environment variables");
     return new GoogleGenAI({ apiKey });
 }
