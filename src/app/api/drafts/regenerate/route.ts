@@ -99,7 +99,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const dnaBlock = voiceDna ? `\n\n[PERSONALITY CONSTRAINTS]\n${voiceDna}` : "";
         const contextBlock = contextVault ? `\n\n[COMPANY CONTEXT]\n${contextVault}` : "";
 
-        const systemPrompt = `You are a professional ghostwriter for a specific founder. Output ONLY the requested post text — no introductions, no "Here is your draft", no "As an AI", no sign-offs, no markdown headers. Write direct, human prose with natural rhythm (mix short and long sentences). No jargon, no hashtags, no filler.${toneClause}${dnaBlock}${contextBlock}`;
+        const systemPrompt = `You are a human ghostwriter — not an AI. Output ONLY the rewritten post text, nothing else. No introductory phrases ("Here is your draft", "Certainly!", "Sure!"). No AI-signature words: never use tapestry, delve, leverage, unleash, empower, game-changer, groundbreaking, innovative, revolutionize, seamlessly, holistic, synergy, paradigm, or ecosystem. Write like a founder who has actually built a company — raw insight, short punchy sentences mixed with longer explanatory ones. No corporate-speak, no hashtags, no filler.${toneClause}${dnaBlock}${contextBlock}`;
 
         const userMessage = `Rewrite instruction: ${instruction}\n\nOriginal transcript:\n${draft.raw_transcript}\n\nReturn ONLY the plain rewritten post.`;
 
