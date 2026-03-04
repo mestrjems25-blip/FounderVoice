@@ -8,7 +8,7 @@ import { createServerClient } from "@/lib/supabase/server";
 
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-2.0-flash";
 
 function getGenAI() {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY;
