@@ -115,12 +115,21 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
     const { From, MediaUrl0, MediaContentType0, Body } = params;
     const numMedia = Number(params.NumMedia ?? 0);
 
-    console.log(`[pipeline] START — From: ${From} | MOCK_MODE: ${MOCK_MODE}`);
-
-    const userId = await getUserByPhone(From);
-    console.log(`[pipeline] getUserByPhone → userId: ${userId ?? "NULL (unlinked)"}`);
+    // Diagnostic: confirm which Supabase project this serverless function is hitting
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "MISSING";
+    const serviceKeySet = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+    console.log(`[pipeline] START — From: ${From} | MOCK_MODE: ${MOCK_MODE} | supabase: ${supabaseUrl} | serviceKey: ${serviceKeySet}`);
 
     const supabase = createServerClient();
+
+    // Table access probe — if this returns PGRST205, Supabase keys or project are wrong
+    const { count: profileCount, error: probeError } = await supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true });
+    console.log(`[pipeline] DB probe — profiles count: ${profileCount ?? "null"} | error: ${probeError?.code ?? "none"} ${probeError?.message ?? ""}`);
+
+    const userId = await getUserByPhone(From);
+    console.log(`[pipeline] getUserByPhone → userId: ${userId ?? "NULL (unlinked)"}}`);
 
     if (!userId) {
         // Check if they're sending a link token from the dashboard Connect WhatsApp flow
