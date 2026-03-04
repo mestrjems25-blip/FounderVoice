@@ -27,15 +27,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const { data: profileRow } = await supabase
         .from("profiles")
-        .select("daily_requests_count, last_request_date")
+        .select("daily_requests_count, last_request_date, subscription_tier")
         .eq("id", user.id)
         .single();
+
+    const tier = profileRow?.subscription_tier ?? "trial";
+    const isPaid = tier === "pro" || tier === "founder";
 
     const today = new Date().toISOString().split("T")[0];
     const lastDate = profileRow?.last_request_date ?? null;
     const dailyCount = lastDate === today ? (profileRow?.daily_requests_count ?? 0) : 0;
 
-    if (dailyCount >= DAILY_LIMIT) {
+    if (!isPaid && dailyCount >= DAILY_LIMIT) {
         return NextResponse.json(
             { error: `Daily limit of ${DAILY_LIMIT} reached. Upgrade to Pro for unlimited drafts.` },
             { status: 429 }

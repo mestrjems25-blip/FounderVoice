@@ -159,7 +159,8 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
     const lastDate = profileRow?.last_request_date ?? null;
     const dailyCount = lastDate === today ? (profileRow?.daily_requests_count ?? 0) : 0;
 
-    if (dailyCount >= DAILY_LIMIT) {
+    const isPaid = tier === "pro" || tier === "founder";
+    if (!isPaid && dailyCount >= DAILY_LIMIT) {
         const msg = `You've reached your daily limit of ${DAILY_LIMIT} posts. Upgrade to Pro for unlimited content: ${APP_URL}/dashboard/billing`;
         if (MOCK_MODE) {
             console.log(`[pipeline] Daily limit reached — would send: "${msg}"`);
