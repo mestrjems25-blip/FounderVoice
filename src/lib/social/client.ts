@@ -27,15 +27,16 @@ export interface PlatformAnalytics {
 export type AnalyticsResult = Partial<Record<SocialPlatform, PlatformAnalytics>>;
 
 function apiKey(): string {
-    const key = process.env.UPLOAD_POST_API_KEY;
+    const key = process.env.UPLOAD_POST_API_KEY?.trim();
     if (!key) throw new Error("[social] UPLOAD_POST_API_KEY not set");
+    console.log("[social] API key prefix:", key.slice(0, 5), "| length:", key.length);
     return key;
 }
 
 function authHeaders(): HeadersInit {
     return {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey()}`,
+        Authorization: `ApiKey ${apiKey()}`,
     };
 }
 
@@ -46,7 +47,7 @@ export function toUpUsername(userId: string): string {
 }
 
 // Create an Upload-Post profile for this user. Safe to call multiple times —
-// ignores "already exists" errors.
+// ignores "already exists" (409) responses.
 export async function ensureProfile(userId: string): Promise<void> {
     const username = toUpUsername(userId);
     const res = await fetch(`${BASE}/uploadposts/users`, {
@@ -56,7 +57,7 @@ export async function ensureProfile(userId: string): Promise<void> {
     });
     if (!res.ok && res.status !== 409) {
         const text = await res.text();
-        console.error("[social] ensureProfile failed:", res.status, text);
+        throw new Error(`[social] ensureProfile failed: ${res.status} ${text}`);
     }
 }
 
@@ -68,8 +69,14 @@ export async function generateOAuthUrl(
     redirectUrl: string
 ): Promise<string> {
     const username = toUpUsername(userId);
-    await ensureProfile(userId);
 
+    // Step 1: guarantee user exists before requesting a JWT
+    console.log("[social] ensureProfile →", username);
+    await ensureProfile(userId);
+    console.log("[social] ensureProfile ✓");
+
+    // Step 2: generate the OAuth access URL
+    console.log("[social] generate-jwt →", { username, platforms });
     const res = await fetch(`${BASE}/uploadposts/users/generate-jwt`, {
         method: "POST",
         headers: authHeaders(),
@@ -82,6 +89,7 @@ export async function generateOAuthUrl(
     }
 
     const data = await res.json() as { access_url: string };
+    console.log("[social] generate-jwt ✓ →", data.access_url.slice(0, 60) + "…");
     return data.access_url;
 }
 
@@ -90,7 +98,7 @@ export async function getConnectedPlatforms(userId: string): Promise<ConnectedPl
     const username = toUpUsername(userId);
     try {
         const res = await fetch(`${BASE}/uploadposts/users/${username}`, {
-            headers: { Authorization: `Bearer ${apiKey()}` },
+            headers: { Authorization: `ApiKey ${apiKey()}` },
         });
         if (!res.ok) return { x: false, linkedin: false };
         const data = await res.json() as { profile?: { connected_platforms?: string[] } };
@@ -126,6 +134,30 @@ export async function postText(
     return { id: r.id ?? "", status: r.status ?? "queued" };
 }
 
+// Strip AI preamble and meta-talk from a post before sending to social platforms.
+// Handles patterns like "Here's a post:", separator lines, and blank preambles.
+export function cleanPostText(text: string): string {
+    const lines = text.split("\n");
+    let startIdx = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        // Skip blank lines and separator lines
+        if (!line || /^[-_=*]{3,}$/.test(line)) {
+            startIdx = i + 1;
+            continue;
+        }
+        // Skip short meta-label lines ending with ":" e.g. "Here's a post:" / "Post:"
+        if (i === startIdx && line.length < 80 && line.endsWith(":") && !line.includes("\n")) {
+            startIdx = i + 1;
+            continue;
+        }
+        break;
+    }
+
+    return lines.slice(startIdx).join("\n").trimEnd();
+}
+
 // Fetch account-level analytics for the user's connected platforms.
 export async function getAnalytics(
     userId: string,
@@ -137,7 +169,7 @@ export async function getAnalytics(
     try {
         const res = await fetch(
             `${BASE}/analytics/${username}?platforms=${platformStr}`,
-            { headers: { Authorization: `Bearer ${apiKey()}` } }
+            { headers: { Authorization: `ApiKey ${apiKey()}` } }
         );
         if (!res.ok) return {};
         const data = await res.json() as Record<string, PlatformAnalytics>;

@@ -74,6 +74,9 @@ alter table profiles add column if not exists whatsapp_notifications boolean not
 alter table profiles add column if not exists buffer_access_token text;
 alter table drafts add column if not exists buffer_post_id text;
 
+-- ───── Upload-Post ─────
+alter table profiles add column if not exists upload_post_id text;
+
 -- ───── Row Level Security ─────
 alter table profiles enable row level security;
 alter table voice_samples enable row level security;

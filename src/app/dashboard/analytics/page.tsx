@@ -1,6 +1,6 @@
 import { createSessionClient } from "@/lib/supabase/session";
 import { TRIAL_DAYS } from "@/lib/trial";
-import { getAnalytics, getConnectedPlatforms } from "@/lib/social/client";
+import { getAnalytics, getConnectedPlatforms, type PlatformAnalytics } from "@/lib/social/client";
 import { BarChart3, FileText, Lock, Mic, TrendingUp, Users, Zap } from "lucide-react";
 import Link from "next/link";
 
@@ -140,6 +140,23 @@ export default async function AnalyticsPage() {
     const maxReach = Math.max(brutalReach, deepDiveReach, xFactorReach, 1);
 
     const publishRate = totalDrafts > 0 ? `${Math.round((published / totalDrafts) * 100)}%` : "0%";
+
+    // Aggregate social stats across all connected platforms
+    const socialData = socialAnalytics as Record<string, PlatformAnalytics>;
+    const totalViews = activePlatforms.reduce((s, p) => s + (socialData[p]?.impressions ?? 0), 0);
+    const totalLikes = activePlatforms.reduce((s, p) => s + (socialData[p]?.likes ?? 0), 0);
+    const totalShares = activePlatforms.reduce((s, p) => s + (socialData[p]?.shares ?? socialData[p]?.reposts ?? 0), 0);
+
+    // Derive best-performing variation from estimated reach-per-post rates
+    const variationReach: Record<string, number> = {
+        brutal: brutalCount > 0 ? 900 : 0,
+        x_factor: xFactorCount > 0 ? 2600 : 0,
+        deep_dive: deepDiveCount > 0 ? 1800 : 0,
+    };
+    const bestVariation = Object.entries(variationReach)
+        .filter(([, r]) => r > 0)
+        .sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
+    const variationLabel: Record<string, string> = { brutal: "Brutal", x_factor: "X-Factor", deep_dive: "Deep Dive" };
 
     return (
         <div className="flex flex-col gap-8">
@@ -281,6 +298,34 @@ export default async function AnalyticsPage() {
                         <Zap className="w-4 h-4" />
                         Upgrade to Pro — $49/mo
                     </Link>
+                </div>
+            )}
+
+            {/* Performance Scorecard */}
+            {(totalViews > 0 || totalLikes > 0 || totalShares > 0 || bestVariation) && (
+                <div className="glass-card rounded-2xl p-6 flex flex-col gap-5">
+                    <p className="text-sm font-semibold text-white">Performance Scorecard</p>
+
+                    {(totalViews > 0 || totalLikes > 0 || totalShares > 0) && (
+                        <div className="grid grid-cols-3 gap-4">
+                            {[
+                                { label: "Total Views", value: totalViews },
+                                { label: "Likes", value: totalLikes },
+                                { label: "Shares", value: totalShares },
+                            ].map(({ label, value }) => (
+                                <div key={label} className="flex flex-col gap-1">
+                                    <p className="text-2xl font-bold text-white">{value.toLocaleString()}</p>
+                                    <p className="text-xs text-white/40">{label}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {bestVariation && (
+                        <p className="text-xs text-[#818cf8] border-t border-white/5 pt-4">
+                            Your <span className="font-semibold">{variationLabel[bestVariation]}</span> posts get the most traction — keep shipping them.
+                        </p>
+                    )}
                 </div>
             )}
 

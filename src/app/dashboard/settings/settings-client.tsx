@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Bell, CheckCircle2, Linkedin, MessageCircle, RefreshCw, Trash2, Unlink, Zap } from "lucide-react";
 import {
@@ -74,8 +74,8 @@ export function SettingsClient({
     phoneNumber: initialPhone,
     verificationToken: initialToken,
     waLink: initialWaLink,
-    linkedinConnected,
-    xConnected,
+    linkedinConnected: initialLinkedin,
+    xConnected: initialX,
     socialStatus,
 }: Props) {
     const [whatsapp, setWhatsapp] = useState(initialWhatsapp);
@@ -83,10 +83,45 @@ export function SettingsClient({
     const [phone, setPhone] = useState<string | null>(initialPhone);
     const [waLink, setWaLink] = useState(initialWaLink);
     const [token, setToken] = useState(initialToken);
+    const [linkedinConnected, setLinkedinConnected] = useState(initialLinkedin);
+    const [xConnected, setXConnected] = useState(initialX);
+    const [socialToast, setSocialToast] = useState<"connected" | "error" | undefined>(socialStatus);
+    const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
     const [confirmDisconnect, setConfirmDisconnect] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmWipe, setConfirmWipe] = useState(false);
     const [isPending, startTransition] = useTransition();
+
+    const handleSocialMessage = useCallback((e: MessageEvent<{ type?: string }>) => {
+        if (e.data?.type === "social-connected") {
+            setLinkedinConnected(true);
+            setXConnected(true);
+            setSocialToast("connected");
+            setConnectingPlatform(null);
+        }
+        if (e.data?.type === "social-error") {
+            setSocialToast("error");
+            setConnectingPlatform(null);
+        }
+    }, []);
+
+    useEffect(() => {
+        window.addEventListener("message", handleSocialMessage);
+        return () => window.removeEventListener("message", handleSocialMessage);
+    }, [handleSocialMessage]);
+
+    function connectSocial(platforms: string) {
+        setConnectingPlatform(platforms);
+        const popup = window.open(
+            `/api/auth/social/connect?platforms=${platforms}`,
+            "social-connect",
+            "width=600,height=700,left=200,top=100,toolbar=0,menubar=0,location=0"
+        );
+        if (!popup) {
+            // Popup blocked — fall back to full-page redirect
+            window.location.href = `/api/auth/social/connect?platforms=${platforms}`;
+        }
+    }
 
     function handleWhatsappToggle(v: boolean) {
         setWhatsapp(v);
@@ -151,7 +186,7 @@ export function SettingsClient({
 
             {/* Social connection status toast */}
             <AnimatePresence>
-                {socialStatus === "connected" && (
+                {socialToast === "connected" && (
                     <motion.div
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -160,10 +195,10 @@ export function SettingsClient({
                         style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}
                     >
                         <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-                        <p className="text-sm text-green-300">Social accounts connected — drafts will now publish directly from your dashboard.</p>
+                        <p className="text-sm text-green-300">Account connected — drafts will now publish directly from your dashboard.</p>
                     </motion.div>
                 )}
-                {socialStatus === "error" && (
+                {socialToast === "error" && (
                     <motion.div
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -261,59 +296,45 @@ export function SettingsClient({
                     <p className="text-sm font-semibold text-white">Social Accounts</p>
                 </div>
 
-                {/* LinkedIn row */}
-                <div className="flex items-center justify-between py-3 border-b border-white/5">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-white">LinkedIn</p>
-                            {linkedinConnected && (
-                                <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                    Connected
-                                </span>
-                            )}
-                        </div>
-                        <p className="text-xs text-white/40 mt-0.5">Publish drafts directly to your LinkedIn profile.</p>
-                    </div>
-                    <a
-                        href="/api/auth/social/connect?platforms=linkedin"
-                        className="text-xs px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-1.5 shrink-0"
-                        style={{
-                            background: linkedinConnected ? "rgba(34,197,94,0.08)" : "rgba(99,102,241,0.12)",
-                            color: linkedinConnected ? "#4ade80" : "#818cf8",
-                            border: `1px solid ${linkedinConnected ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)"}`,
-                        }}
+                {(
+                    [
+                        { key: "linkedin", label: "LinkedIn", description: "Publish drafts directly to your LinkedIn profile.", isConnected: linkedinConnected },
+                        { key: "x", label: "X (Twitter)", description: "Publish threads and posts directly to X.", isConnected: xConnected },
+                    ] as const
+                ).map(({ key, label, description, isConnected }, i, arr) => (
+                    <div
+                        key={key}
+                        className={`flex items-center justify-between py-3 ${i < arr.length - 1 ? "border-b border-white/5" : ""}`}
                     >
-                        {linkedinConnected ? "Reconnect" : "Connect"}
-                    </a>
-                </div>
-
-                {/* X row */}
-                <div className="flex items-center justify-between py-3">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-white">X (Twitter)</p>
-                            {xConnected && (
-                                <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                    Connected
-                                </span>
-                            )}
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-white">{label}</p>
+                                {isConnected && (
+                                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                        Connected
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-white/40 mt-0.5">{description}</p>
                         </div>
-                        <p className="text-xs text-white/40 mt-0.5">Publish threads and posts directly to X.</p>
+                        <button
+                            onClick={() => connectSocial(key)}
+                            disabled={connectingPlatform === key}
+                            className="text-xs px-4 py-2 rounded-lg font-medium transition-all shrink-0 disabled:opacity-70 flex items-center gap-1.5"
+                            style={{
+                                background: isConnected ? "rgba(34,197,94,0.08)" : "rgba(99,102,241,0.12)",
+                                color: isConnected ? "#4ade80" : "#818cf8",
+                                border: `1px solid ${isConnected ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)"}`,
+                            }}
+                        >
+                            {connectingPlatform === key && (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                            )}
+                            {connectingPlatform === key ? "Preparing secure connection…" : isConnected ? "✓ Connected" : "Connect"}
+                        </button>
                     </div>
-                    <a
-                        href="/api/auth/social/connect?platforms=x"
-                        className="text-xs px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-1.5 shrink-0"
-                        style={{
-                            background: xConnected ? "rgba(34,197,94,0.08)" : "rgba(99,102,241,0.12)",
-                            color: xConnected ? "#4ade80" : "#818cf8",
-                            border: `1px solid ${xConnected ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)"}`,
-                        }}
-                    >
-                        {xConnected ? "Reconnect" : "Connect"}
-                    </a>
-                </div>
+                ))}
             </div>
 
             {/* Preferences */}

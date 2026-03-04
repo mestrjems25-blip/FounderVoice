@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSessionClient } from "@/lib/supabase/session";
-import { generateOAuthUrl, type SocialPlatform } from "@/lib/social/client";
+import { createServerClient } from "@/lib/supabase/server";
+import { generateOAuthUrl, toUpUsername, type SocialPlatform } from "@/lib/social/client";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
     const supabase = await createSessionClient();
     const { data: { user } } = await supabase.auth.getUser();
 
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+        ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
     if (!user) {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
         return NextResponse.redirect(`${baseUrl}/auth/signin`);
     }
 
@@ -21,8 +24,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: "No valid platforms specified" }, { status: 400 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-        ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    // Store the Upload-Post username in the user's profile (one-time set)
+    const upId = toUpUsername(user.id);
+    const admin = createServerClient();
+    await admin
+        .from("profiles")
+        .update({ upload_post_id: upId, updated_at: new Date().toISOString() })
+        .eq("id", user.id);
 
     const redirectUrl = `${baseUrl}/api/auth/social/callback`;
 
@@ -31,6 +39,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         return NextResponse.redirect(accessUrl);
     } catch (err) {
         console.error("[social/connect]", err);
-        return NextResponse.redirect(`${baseUrl}/dashboard/settings?social=error`);
+        return NextResponse.redirect(`${baseUrl}/api/auth/social/callback?error=connect_failed`);
     }
 }

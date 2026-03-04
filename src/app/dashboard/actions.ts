@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSessionClient } from "@/lib/supabase/session";
 import { createServerClient } from "@/lib/supabase/server";
-import { postText } from "@/lib/social/client";
+import { cleanPostText, postText } from "@/lib/social/client";
 
 export interface VoiceStyle {
     tone?: "professional" | "casual" | "provocative" | "inspirational";
@@ -29,7 +29,8 @@ export async function publishDraft(draftId: string, scheduledAt?: string): Promi
 
     if (process.env.UPLOAD_POST_API_KEY) {
         try {
-            await postText(user.id, draft.ai_output, ["linkedin"], scheduledAt);
+            const cleanText = cleanPostText(draft.ai_output ?? "");
+            await postText(user.id, cleanText, ["linkedin"], scheduledAt);
         } catch (err) {
             console.error("[publishDraft] Upload-Post failed:", err);
         }
