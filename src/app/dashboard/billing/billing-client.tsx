@@ -99,12 +99,12 @@ export function BillingClient({ used, usagePct, currentTier, success, bufferConn
             });
             const text = await res.text();
             if (!text) {
-                console.error("[billing] Checkout error: empty response (status", res.status, ")");
+                alert("Checkout failed: empty server response (status " + res.status + ")");
                 return;
             }
             const { url, error } = JSON.parse(text) as { url?: string; error?: string };
             if (error || !url) {
-                console.error("[billing] Checkout error:", error);
+                alert("Checkout error: " + (error ?? "No URL returned"));
                 return;
             }
             window.location.href = url;

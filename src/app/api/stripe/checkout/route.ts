@@ -11,6 +11,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             pro: process.env.STRIPE_PRO_PRICE_ID,
             founder: process.env.STRIPE_FOUNDER_PRICE_ID,
         };
+        console.log("[Stripe Checkout] Price IDs set — pro:", !!PRICE_IDS.pro, "founder:", !!PRICE_IDS.founder);
 
         const supabase = await createSessionClient();
         const { data: { user } } = await supabase.auth.getUser();
@@ -23,7 +24,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const priceId = PRICE_IDS[tier];
 
         if (!priceId) {
-            return NextResponse.json({ error: "Invalid tier or missing price ID" }, { status: 400 });
+            console.error("[Stripe Checkout] Missing price ID for tier:", tier);
+            return NextResponse.json({ error: `No Stripe price configured for "${tier}" — set STRIPE_${tier.toUpperCase()}_PRICE_ID in Vercel` }, { status: 400 });
         }
 
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL
