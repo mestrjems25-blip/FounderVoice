@@ -11,6 +11,15 @@ import { createServerClient } from "@/lib/supabase/server";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
+function stripAiChatter(text: string): string {
+    return text
+        .split("\n")
+        .filter((line) => !/^(sure[,!.]|here (is|are|'?s)\b|i've (updated|rewritten|made|incorporated)|as an ai|certainly[,!.]|of course[,!.]|i hope|please (let me|feel free)|i('ve| have) written|note[:\s])/i.test(line.trim()))
+        .join("\n")
+        .replace(/^\n+/, "")
+        .trimEnd();
+}
+
 const MOCK_REGEN =
     "Scaling in 2026 isn't about more people. It's about better leverage. We hit $1M ARR with 2 people and a fleet of AI agents. Stop hiring. Start automating.";
 
@@ -111,10 +120,11 @@ VOICE RULES (non-negotiable):
         const userMessage = `Rewrite instruction: ${instruction}\n\nOriginal transcript:\n${draft.raw_transcript}\n\nReturn ONLY the plain rewritten post.`;
 
         try {
-            aiOutput = await callGroq([
+            const raw = await callGroq([
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userMessage },
             ]);
+            aiOutput = stripAiChatter(raw);
             console.log("[regenerate] Groq succeeded — draftId:", draftId);
         } catch (err) {
             console.error("[regenerate] Groq failed:", err);

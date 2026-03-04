@@ -76,6 +76,17 @@ async function callGroq(prompt: string, maxRetries = 2): Promise<string> {
     throw new Error("callGroq: exhausted retries");
 }
 
+// Remove AI conversational scaffolding that leaks into post output.
+// Strips sentences/lines that start with courtesy phrases or AI self-references.
+function stripAiChatter(text: string): string {
+    return text
+        .split("\n")
+        .filter((line) => !/^(sure[,!.]|here (is|are|'?s)\b|i've (updated|rewritten|made|incorporated)|as an ai|certainly[,!.]|of course[,!.]|i hope|please (let me|feel free)|i('ve| have) written|note[:\s])/i.test(line.trim()))
+        .join("\n")
+        .replace(/^\n+/, "")
+        .trimEnd();
+}
+
 interface VoiceStyle {
     tone?: string;
     formatting?: string;
@@ -188,7 +199,12 @@ export async function processTranscript(
         try {
             const raw = await callGroq(prompt);
             const jsonMatch = raw.match(/\{[\s\S]*\}/);
-            variations = JSON.parse(sanitizeJsonString(jsonMatch?.[0] ?? raw)) as PostVariations;
+            const parsed = JSON.parse(sanitizeJsonString(jsonMatch?.[0] ?? raw)) as PostVariations;
+            variations = {
+                brutal: stripAiChatter(parsed.brutal),
+                x_factor: stripAiChatter(parsed.x_factor),
+                deep_dive: stripAiChatter(parsed.deep_dive),
+            };
             console.log("[processor] Groq response parsed successfully");
         } catch (err) {
             console.error("[processor] Groq failed after retries — saving raw transcript fallback:", err);
