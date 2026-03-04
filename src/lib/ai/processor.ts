@@ -8,8 +8,35 @@ import { createServerClient } from "@/lib/supabase/server";
 
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
+const GEMINI_MODEL = "gemini-1.5-flash";
+
 function getGenAI() {
     return new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY! });
+}
+
+async function callGemini(
+    contents: Parameters<ReturnType<typeof getGenAI>["models"]["generateContent"]>[0]["contents"],
+    maxRetries = 2
+): Promise<string> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const result = await getGenAI().models.generateContent({ model: GEMINI_MODEL, contents });
+            return result.text ?? "";
+        } catch (err) {
+            const is429 =
+                (err as { status?: number }).status === 429 ||
+                String(err).includes("429") ||
+                String(err).includes("RESOURCE_EXHAUSTED");
+            if (is429 && attempt < maxRetries) {
+                const delay = 2000 * (attempt + 1);
+                console.warn(`[processor] Gemini 429 — retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+                await new Promise<void>((r) => setTimeout(r, delay));
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw new Error("callGemini: exhausted retries");
 }
 
 interface VoiceStyle {
@@ -150,18 +177,14 @@ export async function processTranscript(
             : buildPrompt(voiceStyle, transcript, voiceDna, contextVault);
 
         try {
-            const result = await getGenAI().models.generateContent({
-                model: "gemini-2.0-flash",
-                contents,
-            });
-
-            const raw = result.text ?? "";
+            const raw = await callGemini(contents);
             const jsonMatch = raw.match(/\{[\s\S]*\}/);
             variations = JSON.parse(jsonMatch?.[0] ?? raw) as PostVariations;
             console.log("[processor] Gemini response parsed successfully");
         } catch (err) {
-            console.error("[processor] Gemini generateContent failed:", err);
-            throw err;
+            console.error("[processor] Gemini failed after retries — saving raw transcript fallback:", err);
+            const fallback = `[AI processing queued — edit this draft with your own words]\n\n${transcript}`;
+            variations = { brutal: fallback, x_factor: fallback, deep_dive: fallback };
         }
     }
 
@@ -248,11 +271,7 @@ export async function generateVariation(
         const prompt = `${buildPrompt(voiceStyle, transcript, voiceDna, contextVault)}\n\nRewrite this transcript specifically as the "${variationType}" variation, applying this instruction: ${instruction}\n\nReturn ONLY the plain text of the post — no JSON, no labels.`;
 
         try {
-            const result = await getGenAI().models.generateContent({
-                model: "gemini-2.0-flash",
-                contents: prompt,
-            });
-            aiOutput = (result.text ?? "").trim();
+            aiOutput = (await callGemini(prompt)).trim();
             console.log("[processor] generateVariation succeeded");
         } catch (err) {
             console.error("[processor] generateVariation Gemini failed:", err);
