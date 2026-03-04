@@ -35,12 +35,14 @@ export async function transcribeAudio(
     const buffer = Buffer.from(await audioResponse.arrayBuffer());
     const audioFile = new File([buffer], "audio.ogg", { type: "audio/ogg" });
 
+    console.log(`[transcription] Sending to Groq whisper-large-v3-turbo — buffer: ${buffer.length} bytes | keySet: ${!!process.env.GROQ_API_KEY}`);
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const { text } = await groq.audio.transcriptions.create({
         file: audioFile,
         model: "whisper-large-v3-turbo",
         language: "en",
     });
+    console.log(`[transcription] Groq response — ${text.length} chars`);
 
     await supabase
         .from("voice_samples")

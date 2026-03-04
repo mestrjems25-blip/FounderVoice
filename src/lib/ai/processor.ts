@@ -165,7 +165,8 @@ export async function processTranscript(
         }
     }
 
-    await supabase.from("drafts").insert([
+    console.log("[processor] Inserting 3 drafts into DB — userId:", userId);
+    const { error: insertError } = await supabase.from("drafts").insert([
         {
             user_id: userId,
             raw_transcript: transcript,
@@ -194,6 +195,12 @@ export async function processTranscript(
             status: "pending",
         },
     ]);
+
+    if (insertError) {
+        console.error("[processor] drafts insert FAILED:", insertError.code, insertError.message, insertError.details);
+        throw insertError;
+    }
+    console.log("[processor] 3 drafts inserted successfully");
 
     return variations;
 }

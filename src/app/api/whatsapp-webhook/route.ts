@@ -213,34 +213,47 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
         sourceAudioUrl = "mock://voice-placeholder";
         console.log(`[pipeline] Mock mode — skipping media processing`);
     } else if (inputType === "audio") {
+        console.log(`[pipeline] Downloading audio from Twilio — url: ${MediaUrl0}`);
         const audioBuffer = await downloadTwilioMedia(MediaUrl0);
-        const storagePath = `${userId}/${Date.now()}.ogg`;
+        console.log(`[pipeline] Audio downloaded — ${audioBuffer.length} bytes`);
 
+        const storagePath = `${userId}/${Date.now()}.ogg`;
+        console.log(`[pipeline] Uploading to Supabase Storage — bucket: voice-memos | path: ${storagePath}`);
         const { error: uploadError } = await supabase.storage
             .from("voice-memos")
             .upload(storagePath, audioBuffer, { contentType: "audio/ogg", upsert: false });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+            console.error(`[pipeline] Storage upload FAILED:`, uploadError.message, (uploadError as { statusCode?: string }).statusCode ?? "");
+            throw uploadError;
+        }
 
         const { data: { publicUrl } } = supabase.storage
             .from("voice-memos")
             .getPublicUrl(storagePath);
         sourceAudioUrl = publicUrl;
+        console.log(`[pipeline] Audio stored — publicUrl: ${sourceAudioUrl}`);
     } else if (inputType === "image") {
+        console.log(`[pipeline] Downloading image from Twilio — url: ${MediaUrl0}`);
         const rawBuffer = await downloadTwilioMedia(MediaUrl0);
         const imageBuffer = await resizeImage(rawBuffer);
         const storagePath = `${userId}/${Date.now()}.jpg`;
 
+        console.log(`[pipeline] Uploading image to Supabase Storage — path: ${storagePath}`);
         const { error: uploadError } = await supabase.storage
             .from("voice-memos")
             .upload(storagePath, imageBuffer, { contentType: "image/jpeg", upsert: false });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+            console.error(`[pipeline] Storage upload FAILED:`, uploadError.message, (uploadError as { statusCode?: string }).statusCode ?? "");
+            throw uploadError;
+        }
 
         const { data: { publicUrl } } = supabase.storage
             .from("voice-memos")
             .getPublicUrl(storagePath);
         sourceImageUrl = publicUrl;
+        console.log(`[pipeline] Image stored — publicUrl: ${sourceImageUrl}`);
     }
 
     const sampleAudioUrl = sourceAudioUrl ?? sourceImageUrl ?? "text://";
