@@ -138,17 +138,32 @@ export function SettingsClient({
             return;
         }
 
-        // Fallback: poll for popup close in case postMessage never fires (popup blocked, mobile, etc.)
+        // Poll Upload-Post every 5s while waiting for the user to finish OAuth.
+        // Stops when connected, when the popup closes, or after 2 minutes.
+        const deadline = Date.now() + 2 * 60 * 1000;
         pollRef.current = setInterval(async () => {
-            if (popup.closed) {
+            // Auto-stop if the popup was closed without connecting
+            if (popup.closed && Date.now() > deadline - 115000) {
                 clearPoll();
                 setConnectingPlatform(null);
-                const status = await refreshSocialStatus();
-                if (status.linkedin) setLinkedinConnected(true);
-                if (status.x) setXConnected(true);
-                if (status.linkedin || status.x) setSocialToast("connected");
             }
-        }, 600);
+            if (Date.now() > deadline) {
+                clearPoll();
+                setConnectingPlatform(null);
+                return;
+            }
+            const status = await refreshSocialStatus();
+            if (status.linkedin) setLinkedinConnected(true);
+            if (status.x) setXConnected(true);
+            if (status.linkedin || status.x) {
+                clearPoll();
+                setConnectingPlatform(null);
+                setSocialToast("connected");
+            } else if (popup.closed) {
+                clearPoll();
+                setConnectingPlatform(null);
+            }
+        }, 5000);
     }
 
     function handleWhatsappToggle(v: boolean) {
@@ -322,6 +337,19 @@ export function SettingsClient({
                 <div className="flex items-center gap-2">
                     <Linkedin className="w-4 h-4 text-[#818cf8]" />
                     <p className="text-sm font-semibold text-white">Social Accounts</p>
+                    <button
+                        onClick={async () => {
+                            const status = await refreshSocialStatus();
+                            if (status.linkedin) setLinkedinConnected(true);
+                            if (status.x) setXConnected(true);
+                            if (status.linkedin || status.x) setSocialToast("connected");
+                        }}
+                        className="ml-auto flex items-center gap-1 text-[10px] text-white/30 hover:text-white/60 transition-colors"
+                        title="Refresh connection status"
+                    >
+                        <RefreshCw className="w-3 h-3" />
+                        Refresh
+                    </button>
                 </div>
 
                 {(

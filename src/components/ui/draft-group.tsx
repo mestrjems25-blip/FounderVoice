@@ -55,7 +55,7 @@ function SourceBadge({ type }: { type: SourceType }) {
     );
 }
 
-function VariationCard({ draft }: { draft: Draft }) {
+function VariationCard({ draft, socialConnected }: { draft: Draft; socialConnected: boolean }) {
     const [status, setStatus] = useState<"draft" | "pending" | "approved" | "published" | "scheduled">(draft.status);
     const [isPending, startTransition] = useTransition();
     const [isScheduling, startScheduleTransition] = useTransition();
@@ -108,8 +108,10 @@ function VariationCard({ draft }: { draft: Draft }) {
                     ) : (
                         <div className="flex items-center gap-1.5">
                             <button
-                                onClick={() => setShowSchedule((v) => !v)}
-                                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+                                onClick={() => { if (socialConnected) setShowSchedule((v) => !v); }}
+                                disabled={!socialConnected}
+                                title={socialConnected ? "Schedule this post" : "Connect a social account in Settings to schedule"}
+                                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-500"
                             >
                                 <Calendar className="w-3 h-3" />
                                 Schedule
@@ -201,7 +203,7 @@ function DeleteControls({
     return null;
 }
 
-export function DraftGroup({ group, onDelete }: { group: DraftGroupData; onDelete: () => void }) {
+export function DraftGroup({ group, onDelete, socialConnected = false }: { group: DraftGroupData; onDelete: () => void; socialConnected?: boolean }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [isDeleting, startDeleteTransition] = useTransition();
@@ -344,7 +346,7 @@ export function DraftGroup({ group, onDelete }: { group: DraftGroupData; onDelet
                         {/* All 3 variation cards */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             {sorted.map((draft) => (
-                                <VariationCard key={draft.id} draft={draft} />
+                                <VariationCard key={draft.id} draft={draft} socialConnected={socialConnected} />
                             ))}
                         </div>
                     </motion.div>

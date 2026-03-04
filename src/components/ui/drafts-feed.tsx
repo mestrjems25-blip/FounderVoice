@@ -74,9 +74,10 @@ function groupDrafts(drafts: Draft[]): DraftGroupData[] {
 interface DraftsFeedProps {
     initialDrafts: DbDraft[];
     userId: string;
+    socialConnected?: boolean;
 }
 
-export function DraftsFeed({ initialDrafts, userId }: DraftsFeedProps) {
+export function DraftsFeed({ initialDrafts, userId, socialConnected = false }: DraftsFeedProps) {
     const [drafts, setDrafts] = useState<Draft[]>(initialDrafts.map(toCard));
     const [search, setSearch] = useState("");
 
@@ -186,6 +187,7 @@ export function DraftsFeed({ initialDrafts, userId }: DraftsFeedProps) {
                             >
                                 <DraftGroup
                                     group={group}
+                                    socialConnected={socialConnected}
                                     onDelete={() => {
                                         const ids = new Set(group.drafts.map((d) => d.id));
                                         setDrafts((prev) => prev.filter((d) => !ids.has(d.id)));
