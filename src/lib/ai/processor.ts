@@ -12,6 +12,35 @@ import { createServerClient } from "@/lib/supabase/server";
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
+// Escape literal control characters inside JSON string values so JSON.parse doesn't choke
+function sanitizeJsonString(raw: string): string {
+    let inString = false;
+    let escaped = false;
+    let result = "";
+    for (const char of raw) {
+        if (escaped) {
+            result += char;
+            escaped = false;
+        } else if (char === "\\" && inString) {
+            result += char;
+            escaped = true;
+        } else if (char === '"') {
+            result += char;
+            inString = !inString;
+        } else if (inString) {
+            const code = char.charCodeAt(0);
+            if (char === "\n") result += "\\n";
+            else if (char === "\r") result += "\\r";
+            else if (char === "\t") result += "\\t";
+            else if (code < 32) { /* skip other control chars */ }
+            else result += char;
+        } else {
+            result += char;
+        }
+    }
+    return result;
+}
+
 function getGroq() {
     const apiKey = process.env.GROQ_API_KEY;
     console.log("[Groq Init] Key found:", !!apiKey, "| length:", apiKey?.length ?? 0);
@@ -151,7 +180,7 @@ export async function processTranscript(
         try {
             const raw = await callGroq(prompt);
             const jsonMatch = raw.match(/\{[\s\S]*\}/);
-            variations = JSON.parse(jsonMatch?.[0] ?? raw) as PostVariations;
+            variations = JSON.parse(sanitizeJsonString(jsonMatch?.[0] ?? raw)) as PostVariations;
             console.log("[processor] Groq response parsed successfully");
         } catch (err) {
             console.error("[processor] Groq failed after retries — saving raw transcript fallback:", err);
