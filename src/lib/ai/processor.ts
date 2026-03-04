@@ -11,9 +11,9 @@ const MOCK_MODE = process.env.MOCK_MODE === "true";
 const GEMINI_MODEL = "gemini-1.5-flash";
 
 function getGenAI() {
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY;
     console.log("[Gemini Init] Key found:", !!apiKey);
-    if (!apiKey) throw new Error("[processor] GOOGLE_GENERATIVE_AI_API_KEY is not set in environment variables");
+    if (!apiKey) throw new Error("[processor] Gemini API key not set — check GOOGLE_GENERATIVE_AI_API_KEY in Vercel");
     return new GoogleGenAI({ apiKey });
 }
 
