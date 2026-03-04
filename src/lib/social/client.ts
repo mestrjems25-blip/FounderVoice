@@ -29,14 +29,46 @@ export type AnalyticsResult = Partial<Record<SocialPlatform, PlatformAnalytics>>
 function apiKey(): string {
     const key = process.env.UPLOAD_POST_API_KEY?.trim();
     if (!key) throw new Error("[social] UPLOAD_POST_API_KEY not set");
-    console.log("[social] API key prefix:", key.slice(0, 5), "| length:", key.length);
+    console.log("[social] key prefix:", key.slice(0, 7), "| length:", key.length);
     return key;
 }
 
-function authHeaders(): HeadersInit {
+// Probe once at startup to find which auth scheme Upload-Post accepts.
+// Tries ApiKey → Apikey → Bearer and caches the winner for the process lifetime.
+let resolvedScheme: string | null = null;
+
+async function probeAuthScheme(username: string): Promise<string> {
+    if (resolvedScheme) return resolvedScheme;
+
+    const key = apiKey();
+    const schemes = ["ApiKey", "Apikey", "Bearer"];
+
+    for (const scheme of schemes) {
+        console.log("[social] probing scheme:", scheme);
+        const res = await fetch(`${BASE}/uploadposts/users`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `${scheme} ${key}`,
+            },
+            body: JSON.stringify({ username }),
+        });
+        // 200 (created) or 409 (exists) both mean auth passed
+        if (res.ok || res.status === 409) {
+            console.log("[social] auth scheme resolved:", scheme);
+            resolvedScheme = scheme;
+            return scheme;
+        }
+        console.log("[social] scheme", scheme, "→", res.status);
+    }
+
+    throw new Error("[social] all auth schemes rejected by Upload-Post (401)");
+}
+
+function authHeader(scheme: string): HeadersInit {
     return {
         "Content-Type": "application/json",
-        Authorization: `ApiKey ${apiKey()}`,
+        Authorization: `${scheme} ${apiKey()}`,
     };
 }
 
@@ -47,18 +79,11 @@ export function toUpUsername(userId: string): string {
 }
 
 // Create an Upload-Post profile for this user. Safe to call multiple times —
-// ignores "already exists" (409) responses.
+// ignores "already exists" (409) responses. Also resolves the correct auth scheme.
 export async function ensureProfile(userId: string): Promise<void> {
     const username = toUpUsername(userId);
-    const res = await fetch(`${BASE}/uploadposts/users`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ username }),
-    });
-    if (!res.ok && res.status !== 409) {
-        const text = await res.text();
-        throw new Error(`[social] ensureProfile failed: ${res.status} ${text}`);
-    }
+    await probeAuthScheme(username);
+    // probeAuthScheme already created/confirmed the user as a side-effect
 }
 
 // Generate an OAuth access_url for the user to connect social accounts.
@@ -70,16 +95,16 @@ export async function generateOAuthUrl(
 ): Promise<string> {
     const username = toUpUsername(userId);
 
-    // Step 1: guarantee user exists before requesting a JWT
+    // Step 1: guarantee user exists and resolve the working auth scheme
     console.log("[social] ensureProfile →", username);
     await ensureProfile(userId);
-    console.log("[social] ensureProfile ✓");
+    console.log("[social] ensureProfile ✓ scheme:", resolvedScheme);
 
     // Step 2: generate the OAuth access URL
     console.log("[social] generate-jwt →", { username, platforms });
     const res = await fetch(`${BASE}/uploadposts/users/generate-jwt`, {
         method: "POST",
-        headers: authHeaders(),
+        headers: authHeader(resolvedScheme!),
         body: JSON.stringify({ username, redirect_url: redirectUrl, platforms }),
     });
 
@@ -98,7 +123,7 @@ export async function getConnectedPlatforms(userId: string): Promise<ConnectedPl
     const username = toUpUsername(userId);
     try {
         const res = await fetch(`${BASE}/uploadposts/users/${username}`, {
-            headers: { Authorization: `ApiKey ${apiKey()}` },
+            headers: { Authorization: `${resolvedScheme ?? "ApiKey"} ${apiKey()}` },
         });
         if (!res.ok) return { x: false, linkedin: false };
         const data = await res.json() as { profile?: { connected_platforms?: string[] } };
@@ -169,7 +194,7 @@ export async function getAnalytics(
     try {
         const res = await fetch(
             `${BASE}/analytics/${username}?platforms=${platformStr}`,
-            { headers: { Authorization: `ApiKey ${apiKey()}` } }
+            { headers: { Authorization: `${resolvedScheme ?? "ApiKey"} ${apiKey()}` } }
         );
         if (!res.ok) return {};
         const data = await res.json() as Record<string, PlatformAnalytics>;
