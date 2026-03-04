@@ -31,7 +31,7 @@ create table if not exists drafts (
   user_id uuid not null references profiles(id) on delete cascade,
   raw_transcript text not null,
   ai_output text,
-  status text default 'draft' check (status in ('draft', 'pending', 'approved', 'published')),
+  status text default 'draft' check (status in ('draft', 'pending', 'approved', 'published', 'scheduled')),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -44,7 +44,7 @@ create index if not exists idx_drafts_status on drafts(status);
 -- ───── Schema Additions ─────
 alter table profiles add column if not exists phone_number text unique;
 
-alter table drafts add column if not exists variation_type text check (variation_type in ('short', 'deep_dive', 'carousel'));
+alter table drafts add column if not exists variation_type text check (variation_type in ('brutal', 'x_factor', 'deep_dive'));
 alter table drafts add column if not exists source_audio_url text;
 
 -- ───── Trial & Subscription ─────
@@ -53,6 +53,9 @@ alter table profiles add column if not exists trial_started_at timestamptz not n
 
 -- ───── Multimodal Input ─────
 alter table drafts add column if not exists source_image_url text;
+
+-- ───── Buffer / Scheduling ─────
+alter table drafts add column if not exists scheduled_at timestamptz;
 
 -- ───── Daily Rate Limiting ─────
 alter table profiles add column if not exists daily_requests_count int not null default 0;
@@ -96,3 +99,19 @@ create policy "Users can update own drafts"
 
 create policy "Users can delete own drafts"
   on drafts for delete using (auth.uid() = user_id);
+
+-- ───── Auto-create profile on signup ─────
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id)
+  values (new.id)
+  on conflict (id) do nothing;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
