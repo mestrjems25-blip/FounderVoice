@@ -218,9 +218,9 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
         console.log(`[pipeline] Audio downloaded — ${audioBuffer.length} bytes`);
 
         const storagePath = `${userId}/${Date.now()}.ogg`;
-        console.log(`[pipeline] Uploading to Supabase Storage — bucket: voice-memos | path: ${storagePath}`);
+        console.log(`[pipeline] Uploading to Supabase Storage — bucket: recordings | path: ${storagePath}`);
         const { error: uploadError } = await supabase.storage
-            .from("voice-memos")
+            .from("recordings")
             .upload(storagePath, audioBuffer, { contentType: "audio/ogg", upsert: false });
 
         if (uploadError) {
@@ -229,7 +229,7 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
         }
 
         const { data: { publicUrl } } = supabase.storage
-            .from("voice-memos")
+            .from("recordings")
             .getPublicUrl(storagePath);
         sourceAudioUrl = publicUrl;
         console.log(`[pipeline] Audio stored — publicUrl: ${sourceAudioUrl}`);
@@ -241,7 +241,7 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
 
         console.log(`[pipeline] Uploading image to Supabase Storage — path: ${storagePath}`);
         const { error: uploadError } = await supabase.storage
-            .from("voice-memos")
+            .from("recordings")
             .upload(storagePath, imageBuffer, { contentType: "image/jpeg", upsert: false });
 
         if (uploadError) {
@@ -250,7 +250,7 @@ async function runPipeline(params: Record<string, string>): Promise<void> {
         }
 
         const { data: { publicUrl } } = supabase.storage
-            .from("voice-memos")
+            .from("recordings")
             .getPublicUrl(storagePath);
         sourceImageUrl = publicUrl;
         console.log(`[pipeline] Image stored — publicUrl: ${sourceImageUrl}`);

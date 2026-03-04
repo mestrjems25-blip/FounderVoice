@@ -70,13 +70,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const storagePath = `${user.id}/${Date.now()}.${ext}`;
 
             const { error: uploadError } = await supabase.storage
-                .from("voice-memos")
+                .from("recordings")
                 .upload(storagePath, buffer, { contentType: mimeType, upsert: false });
             if (uploadError) throw uploadError;
 
             const {
                 data: { publicUrl },
-            } = supabase.storage.from("voice-memos").getPublicUrl(storagePath);
+            } = supabase.storage.from("recordings").getPublicUrl(storagePath);
             sourceAudioUrl = publicUrl;
 
             const { data: sampleRow, error: sampleError } = await supabase
@@ -125,13 +125,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             const storagePath = `${user.id}/${Date.now()}.jpg`;
             const { error: uploadError } = await supabase.storage
-                .from("voice-memos")
+                .from("recordings")
                 .upload(storagePath, imageBuffer, { contentType: "image/jpeg", upsert: false });
             if (uploadError) throw uploadError;
 
             const {
                 data: { publicUrl },
-            } = supabase.storage.from("voice-memos").getPublicUrl(storagePath);
+            } = supabase.storage.from("recordings").getPublicUrl(storagePath);
             sourceImageUrl = publicUrl;
             transcript = ((formData.get("caption") as string) ?? "").trim();
 
