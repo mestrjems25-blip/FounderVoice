@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, Bell, Linkedin, MessageCircle, Trash2, Unlink, Zap } from "lucide-react";
+import { AlertTriangle, Bell, Linkedin, MessageCircle, RefreshCw, Trash2, Unlink, Zap } from "lucide-react";
 import {
     deleteAccount,
     deleteAllData,
@@ -62,13 +62,22 @@ function ToggleRow({ icon, label, description, enabled, onChange, disabled, badg
 interface Props {
     whatsappNotifications: boolean;
     phoneNumber: string | null;
+    verificationToken: string;
+    waLink: string;
 }
 
-export function SettingsClient({ whatsappNotifications: initialWhatsapp, phoneNumber: initialPhone }: Props) {
+export function SettingsClient({
+    whatsappNotifications: initialWhatsapp,
+    phoneNumber: initialPhone,
+    verificationToken: initialToken,
+    waLink: initialWaLink,
+}: Props) {
     const [whatsapp, setWhatsapp] = useState(initialWhatsapp);
     const [autoPublish, setAutoPublish] = useState(false);
     const [linkedinSync, setLinkedinSync] = useState(false);
     const [phone, setPhone] = useState<string | null>(initialPhone);
+    const [waLink, setWaLink] = useState(initialWaLink);
+    const [token, setToken] = useState(initialToken);
     const [confirmDisconnect, setConfirmDisconnect] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmWipe, setConfirmWipe] = useState(false);
@@ -81,10 +90,17 @@ export function SettingsClient({ whatsappNotifications: initialWhatsapp, phoneNu
         });
     }
 
-    function handleConnect() {
+    function handleVerify() {
+        window.open(waLink, "_blank");
+    }
+
+    function handleRegenerate() {
         startTransition(async () => {
-            const url = await generateWhatsAppLink();
-            window.open(url, "_blank");
+            const newLink = await generateWhatsAppLink();
+            setWaLink(newLink);
+            // Extract the new 6-char token from the wa.me link
+            const match = decodeURIComponent(newLink).match(/Verify my account:\s*([0-9a-f]{6})/i);
+            if (match) setToken(match[1]);
         });
     }
 
@@ -130,7 +146,7 @@ export function SettingsClient({ whatsappNotifications: initialWhatsapp, phoneNu
 
             {/* WhatsApp Connection */}
             <div className="glass-card rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center gap-2 mb-5">
                     <MessageCircle className="w-4 h-4 text-[#25D366]" />
                     <p className="text-sm font-semibold text-white">WhatsApp Connection</p>
                 </div>
@@ -143,7 +159,7 @@ export function SettingsClient({ whatsappNotifications: initialWhatsapp, phoneNu
                                 <span className="font-mono text-[#25D366]">{phone}</span>
                             </p>
                             <p className="text-xs text-white/40 mt-0.5">
-                                Send voice notes to this number to generate drafts.
+                                Send voice notes, text, or photos to generate LinkedIn drafts.
                             </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -168,21 +184,39 @@ export function SettingsClient({ whatsappNotifications: initialWhatsapp, phoneNu
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <p className="text-sm text-white/60">No WhatsApp number connected.</p>
-                            <p className="text-xs text-white/40 mt-0.5">
-                                Connect your number to send voice notes and generate LinkedIn drafts.
-                            </p>
+                    <div className="flex flex-col gap-5">
+                        {/* Verification code display */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-white/3 border border-white/8">
+                            <div>
+                                <p className="text-xs text-white/40 mb-1.5">Your verification code</p>
+                                <p className="font-mono text-3xl font-bold tracking-[0.3em] text-white">
+                                    {token}
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleRegenerate}
+                                disabled={isPending}
+                                className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors disabled:opacity-30 shrink-0"
+                            >
+                                <RefreshCw className={`w-3 h-3 ${isPending ? "animate-spin" : ""}`} />
+                                New code
+                            </button>
                         </div>
-                        <button
-                            onClick={handleConnect}
-                            disabled={isPending}
-                            className="text-xs px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 text-white bg-[#25D366]/20 border border-[#25D366]/30 hover:bg-[#25D366]/30 shrink-0"
-                        >
-                            <MessageCircle className="w-3 h-3" />
-                            {isPending ? "Generating link…" : "Connect WhatsApp"}
-                        </button>
+
+                        {/* Instructions + CTA */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <p className="text-xs text-white/40 leading-relaxed">
+                                Tap the button to open WhatsApp. The message is pre-filled — just hit send.
+                            </p>
+                            <button
+                                onClick={handleVerify}
+                                disabled={isPending}
+                                className="text-sm px-5 py-2.5 rounded-xl font-semibold transition-colors disabled:opacity-50 flex items-center gap-2 text-white bg-[#25D366]/20 border border-[#25D366]/30 hover:bg-[#25D366]/30 shrink-0"
+                            >
+                                <MessageCircle className="w-4 h-4" />
+                                Verify on WhatsApp
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -223,7 +257,6 @@ export function SettingsClient({ whatsappNotifications: initialWhatsapp, phoneNu
                     <p className="text-sm font-semibold text-red-400">Danger Zone</p>
                 </div>
 
-                {/* Delete all data */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/5">
                     <div>
                         <p className="text-sm font-medium text-white">Delete All Data</p>
@@ -258,7 +291,6 @@ export function SettingsClient({ whatsappNotifications: initialWhatsapp, phoneNu
                     </div>
                 </div>
 
-                {/* Delete account */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <p className="text-sm font-medium text-white">Delete Account</p>

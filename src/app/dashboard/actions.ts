@@ -179,20 +179,20 @@ export async function generateWhatsAppLink(): Promise<string> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    const token = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const { randomBytes } = await import("crypto");
+    const token = randomBytes(3).toString("hex"); // 6-char code, e.g. "a3f9c2"
 
     await supabase
         .from("profiles")
         .update({
             whatsapp_sync_token: token,
-            whatsapp_sync_expires_at: expiresAt,
+            whatsapp_sync_expires_at: null, // no expiry — token is valid until used
             updated_at: new Date().toISOString(),
         })
         .eq("id", user.id);
 
     const waNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "14155238886").replace(/\D/g, "");
-    return `https://wa.me/${waNumber}?text=${encodeURIComponent(`LINK:${token}`)}`;
+    return `https://wa.me/${waNumber}?text=${encodeURIComponent(`Verify my account: ${token}`)}`;
 }
 
 export async function disconnectWhatsApp(): Promise<void> {

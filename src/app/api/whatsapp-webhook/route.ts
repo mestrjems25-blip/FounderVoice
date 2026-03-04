@@ -13,8 +13,8 @@ const WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER ?? "+14155238886";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://foundervoice-lovat.vercel.app";
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
-// Matches "LINK:<uuid>" messages sent via the dashboard Connect WhatsApp flow
-const LINK_RE = /^LINK:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+// Matches "Verify my account: <6-char hex>" sent from the dashboard Settings page
+const LINK_RE = /^Verify my account:\s*([0-9a-f]{6})$/i;
 
 async function downloadTwilioMedia(mediaUrl: string): Promise<Buffer> {
     const credentials = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString("base64");
@@ -63,16 +63,17 @@ async function handleLinkMessage(
         .single();
 
     if (!profile) {
-        await sendWhatsAppMessage(from, "This link is invalid or has already been used. Generate a new one from Settings in your dashboard.");
+        await sendWhatsAppMessage(from, "That code is invalid or has already been used. Get a fresh one from Settings in your dashboard.");
         return true;
     }
 
+    // null expiry = no expiry (permanent token); only check if a deadline was explicitly set
     const expired = profile.whatsapp_sync_expires_at
         ? new Date(profile.whatsapp_sync_expires_at) < new Date()
-        : true;
+        : false;
 
     if (expired) {
-        await sendWhatsAppMessage(from, "This link has expired (30-min window). Generate a new one from Settings in your dashboard.");
+        await sendWhatsAppMessage(from, "That code has expired. Get a fresh one from Settings in your dashboard.");
         return true;
     }
 
