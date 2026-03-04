@@ -8,11 +8,11 @@ import { createServerClient } from "@/lib/supabase/server";
 
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-1.5-flash-8b";
 
 function getGenAI() {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY;
-    console.log("[Gemini Init] Key found:", !!apiKey);
+    console.log("[Gemini Init] Key found:", !!apiKey, "| length:", apiKey?.length ?? 0);
     if (!apiKey) throw new Error("[processor] Gemini API key not set — check GOOGLE_GENERATIVE_AI_API_KEY in Vercel");
     return new GoogleGenAI({ apiKey });
 }
@@ -31,7 +31,7 @@ async function callGemini(
                 String(err).includes("429") ||
                 String(err).includes("RESOURCE_EXHAUSTED");
             if (is429 && attempt < maxRetries) {
-                const delay = 2000 * (attempt + 1);
+                const delay = 10000 * (attempt + 1);
                 console.warn(`[processor] Gemini 429 — retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
                 await new Promise<void>((r) => setTimeout(r, delay));
                 continue;
@@ -99,22 +99,14 @@ function buildPrompt(
         ? "The founder sent an image. Analyze what you see — data, context, insights, and emotion. Transform it into 3 LinkedIn post variations."
         : `Transform this voice memo transcript into 3 LinkedIn post variations:\n\n${transcript}`;
 
-    return `You are an AI twin of a specific founder. You must never use corporate jargon. If the Voice DNA below contradicts your default style, the Voice DNA wins 100% of the time.
+    return `LinkedIn ghostwriter for founders. No jargon, no hashtags, no fluff. Voice DNA overrides everything.${toneClause}${formatClause}${signatureClause}${contextBlock}${dnaBlock}${forbiddenBlock}
 
-You are a world-class LinkedIn ghostwriter for high-performing founders. Your job is to take raw, unedited voice memo transcripts and transform them into polished, high-engagement LinkedIn content that sounds exactly like the founder wrote it themselves — specific, direct, and human. No fluff. No corporate speak. No hashtags. No exclamation marks unless the founder uses them naturally.
-${toneClause}${formatClause}${signatureClause}
+Return ONLY valid JSON — no markdown, no explanation:
+{"brutal":"...","x_factor":"...","deep_dive":"..."}
 
-Return ONLY valid JSON with this exact structure — no markdown fences, no explanation, just the JSON object:
-{
-  "brutal": "...",
-  "x_factor": "...",
-  "deep_dive": "..."
-}
-
-Format rules:
-- brutal: 3–5 punchy sentences. Open with the sharpest or most counterintuitive insight. Unfiltered founder voice — no softening. Max 150 words.
-- x_factor: A structured lesson with magnetic pull. First line is a scroll-stopping hook. Then 3–5 bullet points using → (not •) with concrete specifics. Close with one strong, memorable statement. Max 300 words.
-- deep_dive: A 5-slide carousel script. Format: "Slide 1: [text]\\nSlide 2: [text]" etc. Slide 1 is the hook. Slides 2–4 carry one key point each. Slide 5 is the CTA. Max 15 words per slide.${contextBlock}${dnaBlock}${forbiddenBlock}
+brutal: 3–5 punchy sentences, sharpest insight first, max 150 words.
+x_factor: hook + 3–5 bullet points using →, concrete specifics, strong close, max 300 words.
+deep_dive: 5-slide carousel. "Slide 1: [text]\nSlide 2: [text]" etc. Max 15 words per slide.
 
 ${inputDescription}`;
 }
