@@ -18,23 +18,24 @@ export async function publishDraft(draftId: string, scheduledAt?: string): Promi
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    const { data: draft } = await supabase
-        .from("drafts")
-        .select("ai_output, variation_type")
-        .eq("id", draftId)
-        .eq("user_id", user.id)
-        .single();
+    const [{ data: draft }, { data: profile }] = await Promise.all([
+        supabase.from("drafts").select("ai_output, variation_type").eq("id", draftId).eq("user_id", user.id).single(),
+        supabase.from("profiles").select("buffer_access_token").eq("id", user.id).single(),
+    ]);
 
     if (!draft) throw new Error("Draft not found");
 
-    if (process.env.BUFFER_API_KEY) {
+    const accessToken = (profile?.buffer_access_token as string | null) ?? undefined;
+    const hasBuffer = accessToken || process.env.BUFFER_API_KEY;
+
+    if (hasBuffer) {
         let channelId = process.env.BUFFER_LINKEDIN_CHANNEL_ID;
         if (!channelId) {
-            const channels = await getChannels();
+            const channels = await getChannels(accessToken);
             const target = channels.find((c) => c.service === "linkedin") ?? channels[0];
             channelId = target?.id;
         }
-        if (channelId) await createPost(channelId, draft.ai_output, scheduledAt);
+        if (channelId) await createPost(channelId, draft.ai_output, scheduledAt, accessToken);
     }
 
     await supabase
@@ -208,6 +209,19 @@ export async function disconnectWhatsApp(): Promise<void> {
             whatsapp_sync_expires_at: null,
             updated_at: new Date().toISOString(),
         })
+        .eq("id", user.id);
+
+    revalidatePath("/dashboard/settings");
+}
+
+export async function disconnectBuffer(): Promise<void> {
+    const supabase = await createSessionClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    await supabase
+        .from("profiles")
+        .update({ buffer_access_token: null, updated_at: new Date().toISOString() })
         .eq("id", user.id);
 
     revalidatePath("/dashboard/settings");

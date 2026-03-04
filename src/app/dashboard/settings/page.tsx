@@ -3,7 +3,8 @@ import { createSessionClient } from "@/lib/supabase/session";
 import { createServerClient } from "@/lib/supabase/server";
 import { SettingsClient } from "./settings-client";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ buffer?: string }> }) {
+    const { buffer: bufferParam } = await searchParams;
     const supabase = await createSessionClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -11,7 +12,7 @@ export default async function SettingsPage() {
 
     let { data: profile } = await supabase
         .from("profiles")
-        .select("whatsapp_notifications, phone_number, whatsapp_sync_token")
+        .select("whatsapp_notifications, phone_number, whatsapp_sync_token, buffer_access_token")
         .eq("id", user.id)
         .single();
 
@@ -42,6 +43,8 @@ export default async function SettingsPage() {
             phoneNumber={profile?.phone_number ?? null}
             verificationToken={verificationToken}
             waLink={waLink}
+            bufferConnected={!!profile?.buffer_access_token}
+            bufferStatus={bufferParam === "connected" ? "connected" : bufferParam === "error" ? "error" : undefined}
         />
     );
 }
