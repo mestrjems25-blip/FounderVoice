@@ -13,8 +13,7 @@ const WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER ?? "+14155238886";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://foundervoice-lovat.vercel.app";
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
-// Matches "Verify my account: <6-char hex>" sent from the dashboard Settings page
-const LINK_RE = /^Verify my account:\s*([0-9a-f]{6})$/i;
+const VERIFY_PREFIX = "verify my account:";
 
 async function downloadTwilioMedia(mediaUrl: string): Promise<Buffer> {
     const credentials = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString("base64");
@@ -50,17 +49,26 @@ async function handleLinkMessage(
     from: string,
     supabase: ReturnType<typeof createServerClient>
 ): Promise<boolean> {
-    const match = body.trim().match(LINK_RE);
-    if (!match) return false;
+    // Strip invisible unicode characters WhatsApp sometimes appends, then normalise
+    const clean = body.replace(/[\u200b-\u200f\u202a-\u202e\ufeff]/g, "").trim();
+    if (!clean.toLowerCase().startsWith(VERIFY_PREFIX)) return false;
 
-    const token = match[1];
+    const token = clean.slice(VERIFY_PREFIX.length).trim().toLowerCase();
+    if (!/^[0-9a-f]{6}$/.test(token)) {
+        console.warn(`[pipeline] Verify prefix matched but token invalid: "${token}"`);
+        return false;
+    }
+
     const cleanPhone = from.replace(/^whatsapp:/, "");
+    console.log(`[pipeline] Link attempt — token: "${token}" | phone: ${cleanPhone}`);
 
-    const { data: profile } = await supabase
+    const { data: profile, error: lookupError } = await supabase
         .from("profiles")
         .select("id, whatsapp_sync_expires_at")
         .eq("whatsapp_sync_token", token)
         .single();
+
+    console.log(`[pipeline] Token lookup — found: ${!!profile} | error: ${lookupError?.message ?? "none"}`);
 
     if (!profile) {
         await sendWhatsAppMessage(from, "That code is invalid or has already been used. Get a fresh one from Settings in your dashboard.");

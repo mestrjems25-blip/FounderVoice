@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import { createSessionClient } from "@/lib/supabase/session";
+import { createServerClient } from "@/lib/supabase/server";
 import { SettingsClient } from "./settings-client";
 
 export default async function SettingsPage() {
@@ -14,13 +15,20 @@ export default async function SettingsPage() {
         .eq("id", user.id)
         .single();
 
-    // Auto-generate a verification code if the user doesn't have one yet
+    // Auto-generate a verification code if the user doesn't have one yet.
+    // Use the service-role client to guarantee the write succeeds regardless of RLS.
     if (!profile?.whatsapp_sync_token) {
         const token = randomBytes(3).toString("hex");
-        await supabase
+        const admin = createServerClient();
+        const { error: tokenError } = await admin
             .from("profiles")
-            .update({ whatsapp_sync_token: token, updated_at: new Date().toISOString() })
-            .eq("id", user.id);
+            .upsert({ id: user.id, whatsapp_sync_token: token, updated_at: new Date().toISOString() });
+
+        if (tokenError) {
+            console.error("[settings] Failed to save verification token:", tokenError.message);
+        } else {
+            console.log(`[settings] Verification token generated for ${user.id}: ${token}`);
+        }
         profile = { ...profile, whatsapp_sync_token: token } as typeof profile;
     }
 
