@@ -31,7 +31,7 @@ async function callGemini(
                 String(err).includes("429") ||
                 String(err).includes("RESOURCE_EXHAUSTED");
             if (is429 && attempt < maxRetries) {
-                const delay = 10000 * (attempt + 1);
+                const delay = attempt === 0 ? 15000 : 30000;
                 console.warn(`[processor] Gemini 429 — retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
                 await new Promise<void>((r) => setTimeout(r, delay));
                 continue;
