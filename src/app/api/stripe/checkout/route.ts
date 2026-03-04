@@ -4,6 +4,7 @@ import { createSessionClient } from "@/lib/supabase/session";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
+        console.log("[Stripe Init] Key present:", !!process.env.STRIPE_SECRET_KEY);
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
         const PRICE_IDS: Record<string, string | undefined> = {
