@@ -1,13 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 import { createSessionClient } from "@/lib/supabase/session";
 import { createServerClient } from "@/lib/supabase/server";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// ─── PREMIUM UPGRADE (Anthropic Claude Opus — adaptive thinking) ─────────────
+// import Anthropic from "@anthropic-ai/sdk";
+// const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 
 const MOCK_REGEN =
     "Scaling in 2026 isn't about more people. It's about better leverage. We hit $1M ARR with 2 people and a fleet of AI agents. Stop hiring. Start automating.";
+
+function getGroq() {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error("[regenerate] GROQ_API_KEY not set");
+    return new Groq({ apiKey });
+}
+
+async function callGroq(messages: Groq.Chat.ChatCompletionMessageParam[], maxRetries = 2): Promise<string> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const groq = getGroq();
+            const completion = await groq.chat.completions.create({
+                model: GROQ_MODEL,
+                messages,
+                temperature: 0.7,
+                max_tokens: 1024,
+            });
+            return completion.choices[0]?.message?.content?.trim() ?? "";
+        } catch (err) {
+            const is429 =
+                (err as { status?: number }).status === 429 ||
+                String(err).includes("429") ||
+                String(err).includes("rate_limit");
+            if (is429 && attempt < maxRetries) {
+                const delay = attempt === 0 ? 5000 : 10000;
+                await new Promise<void>((r) => setTimeout(r, delay));
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw new Error("[regenerate] callGroq: exhausted retries");
+}
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     const sessionSupabase = await createSessionClient();
@@ -61,26 +99,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const dnaBlock = voiceDna ? `\n\n[PERSONALITY CONSTRAINTS]\n${voiceDna}` : "";
         const contextBlock = contextVault ? `\n\n[COMPANY CONTEXT]\n${contextVault}` : "";
 
-        const system = `You are a world-class LinkedIn ghostwriter for a specific founder. No jargon, no hashtags, no filler. Write exactly as this founder writes — direct, human, specific.${toneClause}${dnaBlock}${contextBlock}`;
+        const systemPrompt = `You are a professional ghostwriter for a specific founder. Output ONLY the requested post text — no introductions, no "Here is your draft", no "As an AI", no sign-offs, no markdown headers. Write direct, human prose with natural rhythm (mix short and long sentences). No jargon, no hashtags, no filler.${toneClause}${dnaBlock}${contextBlock}`;
 
-        const response = await anthropic.messages.create({
-            model: "claude-opus-4-6",
-            max_tokens: 1024,
-            thinking: { type: "adaptive" },
-            system,
-            messages: [
-                {
-                    role: "user",
-                    content: `Apply this rewrite instruction: ${instruction}\n\nOriginal transcript:\n${draft.raw_transcript}\n\nReturn ONLY the plain rewritten post — no JSON, no labels, no explanation.`,
-                },
-            ],
-        });
+        const userMessage = `Rewrite instruction: ${instruction}\n\nOriginal transcript:\n${draft.raw_transcript}\n\nReturn ONLY the plain rewritten post.`;
 
-        const textBlock = response.content.find((b) => b.type === "text");
-        if (!textBlock || textBlock.type !== "text") {
-            return NextResponse.json({ error: "No response from AI" }, { status: 500 });
+        try {
+            aiOutput = await callGroq([
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userMessage },
+            ]);
+            console.log("[regenerate] Groq succeeded — draftId:", draftId);
+        } catch (err) {
+            console.error("[regenerate] Groq failed:", err);
+            return NextResponse.json({ error: "AI regeneration failed" }, { status: 500 });
         }
-        aiOutput = textBlock.text.trim();
     }
 
     await supabase

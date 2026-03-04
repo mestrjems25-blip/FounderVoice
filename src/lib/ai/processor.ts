@@ -133,12 +133,12 @@ function buildPrompt(
         ? "The founder shared an image with context below. Transform the context into 3 LinkedIn post variations."
         : `Transform this voice memo transcript into 3 LinkedIn post variations:\n\n${transcript}`;
 
-    return `LinkedIn ghostwriter for founders. No jargon, no hashtags, no fluff. Voice DNA overrides everything.${toneClause}${formatClause}${signatureClause}${contextBlock}${dnaBlock}${forbiddenBlock}
+    return `You are a professional ghostwriter for a founder. Output ONLY valid JSON — no introduction, no explanation, no "Here is your post", no markdown fences. Write direct, human prose with natural rhythm. No jargon, no hashtags, no filler. Voice DNA overrides everything.${toneClause}${formatClause}${signatureClause}${contextBlock}${dnaBlock}${forbiddenBlock}
 
-Return ONLY valid JSON — no markdown, no explanation:
+Return ONLY this JSON object (no other text):
 {"brutal":"...","x_factor":"...","deep_dive":"..."}
 
-brutal: 3–5 punchy sentences, sharpest insight first, max 150 words.
+brutal: 3–5 punchy sentences, sharpest insight first, max 150 words. Direct and edgy but realistic.
 x_factor: hook + 3–5 bullet points using →, concrete specifics, strong close, max 300 words.
 deep_dive: 5-slide carousel. "Slide 1: [text]\nSlide 2: [text]" etc. Max 15 words per slide.
 
