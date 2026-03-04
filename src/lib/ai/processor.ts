@@ -133,12 +133,20 @@ function buildPrompt(
         ? "The founder shared an image with context below. Transform the context into 3 LinkedIn post variations."
         : `Transform this voice memo transcript into 3 LinkedIn post variations:\n\n${transcript}`;
 
-    return `You are a human ghostwriter — not an AI. Output ONLY valid JSON, nothing else. No introductory phrases ("Here is your post", "Certainly!", "Sure!"). No AI-signature words: never use tapestry, delve, leverage, unleash, empower, game-changer, groundbreaking, innovative, revolutionize, seamlessly, holistic, synergy, paradigm, or ecosystem. Write like a founder who has actually built a company — raw insight, short punchy sentences mixed with longer explanatory ones, no corporate-speak, no hashtags, no filler. Voice DNA overrides everything.${toneClause}${formatClause}${signatureClause}${contextBlock}${dnaBlock}${forbiddenBlock}
+    return `You are a ghostwriter. Output ONLY valid JSON — the very first character must be "{". No preamble, no commentary, no meta-talk whatsoever.
 
-Return ONLY this JSON object (no other text before or after it):
+VOICE RULES (non-negotiable):
+- Write like a founder talking to a friend over coffee: direct, slightly tired, but sharp.
+- Never use LinkedIn-isms: no rocket emojis (🚀), no "In today's fast-paced world", no "I'm excited to share", no "game-changer", no "tapestry", "delve", "leverage", "unleash", "empower", "groundbreaking", "innovative", "revolutionize", "seamlessly", "holistic", "synergy", "paradigm", "ecosystem".
+- No titles, no headers, no bold text, no hashtags.
+- Single line breaks between ideas — no double-spacing between every sentence.
+- Post body starts immediately. No intro sentence like "Here's a post about X."
+- Voice DNA overrides everything.${toneClause}${formatClause}${signatureClause}${contextBlock}${dnaBlock}${forbiddenBlock}
+
+Return ONLY this JSON object, nothing before or after:
 {"brutal":"...","x_factor":"...","deep_dive":"..."}
 
-brutal: 3–5 punchy sentences, sharpest insight first, max 150 words. Speak with authority — less jargon, more raw truth.
+brutal: 3–5 punchy sentences, sharpest insight first, max 150 words. Raw truth, no jargon.
 x_factor: hook + 3–5 bullet points using →, concrete specifics, strong close, max 300 words.
 deep_dive: 5-slide carousel. "Slide 1: [text]\nSlide 2: [text]" etc. Max 15 words per slide.
 

@@ -99,7 +99,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const dnaBlock = voiceDna ? `\n\n[PERSONALITY CONSTRAINTS]\n${voiceDna}` : "";
         const contextBlock = contextVault ? `\n\n[COMPANY CONTEXT]\n${contextVault}` : "";
 
-        const systemPrompt = `You are a human ghostwriter — not an AI. Output ONLY the rewritten post text, nothing else. No introductory phrases ("Here is your draft", "Certainly!", "Sure!"). No AI-signature words: never use tapestry, delve, leverage, unleash, empower, game-changer, groundbreaking, innovative, revolutionize, seamlessly, holistic, synergy, paradigm, or ecosystem. Write like a founder who has actually built a company — raw insight, short punchy sentences mixed with longer explanatory ones. No corporate-speak, no hashtags, no filler.${toneClause}${dnaBlock}${contextBlock}`;
+        const systemPrompt = `You are a ghostwriter. Output ONLY the rewritten post — the very first character must be the start of the post body. No preamble, no meta-talk, no commentary.
+
+VOICE RULES (non-negotiable):
+- Write like a founder talking to a friend over coffee: direct, slightly tired, but sharp.
+- Never use LinkedIn-isms: no rocket emojis (🚀), no "In today's fast-paced world", no "I'm excited to share", no "game-changer", no "tapestry", "delve", "leverage", "unleash", "empower", "groundbreaking", "innovative", "revolutionize", "seamlessly", "holistic", "synergy", "paradigm", "ecosystem".
+- No titles, no headers, no bold text, no hashtags.
+- Single line breaks between ideas — no double-spacing between every sentence.
+- Post body starts immediately. No intro sentence like "Here's a rewrite" or "Certainly!".${toneClause}${dnaBlock}${contextBlock}`;
 
         const userMessage = `Rewrite instruction: ${instruction}\n\nOriginal transcript:\n${draft.raw_transcript}\n\nReturn ONLY the plain rewritten post.`;
 
