@@ -1,45 +1,50 @@
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 import { createServerClient } from "@/lib/supabase/server";
 
 // ─── PREMIUM UPGRADE (Anthropic Claude Opus) ────────────────────────────────
 // import Anthropic from "@anthropic-ai/sdk";
-// const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── PREMIUM UPGRADE (Google Gemini) ────────────────────────────────────────
+// import { GoogleGenAI } from "@google/genai";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MOCK_MODE = process.env.MOCK_MODE === "true";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-const GEMINI_MODEL = "gemini-1.5-flash-latest";
-
-function getGenAI() {
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY;
-    console.log("[Gemini Init] Key found:", !!apiKey, "| length:", apiKey?.length ?? 0);
-    if (!apiKey) throw new Error("[processor] Gemini API key not set — check GOOGLE_GENERATIVE_AI_API_KEY in Vercel");
-    return new GoogleGenAI({ apiKey });
+function getGroq() {
+    const apiKey = process.env.GROQ_API_KEY;
+    console.log("[Groq Init] Key found:", !!apiKey, "| length:", apiKey?.length ?? 0);
+    if (!apiKey) throw new Error("[processor] GROQ_API_KEY not set — check Vercel env vars");
+    return new Groq({ apiKey });
 }
 
-async function callGemini(
-    contents: Parameters<ReturnType<typeof getGenAI>["models"]["generateContent"]>[0]["contents"],
-    maxRetries = 2
-): Promise<string> {
+async function callGroq(prompt: string, maxRetries = 2): Promise<string> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-            const result = await getGenAI().models.generateContent({ model: GEMINI_MODEL, contents });
-            return result.text ?? "";
+            const groq = getGroq();
+            const completion = await groq.chat.completions.create({
+                model: GROQ_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.7,
+                max_tokens: 1024,
+            });
+            return completion.choices[0]?.message?.content ?? "";
         } catch (err) {
             const is429 =
                 (err as { status?: number }).status === 429 ||
                 String(err).includes("429") ||
-                String(err).includes("RESOURCE_EXHAUSTED");
+                String(err).includes("rate_limit");
             if (is429 && attempt < maxRetries) {
-                const delay = attempt === 0 ? 15000 : 30000;
-                console.warn(`[processor] Gemini 429 — retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+                const delay = attempt === 0 ? 5000 : 10000;
+                console.warn(`[processor] Groq 429 — retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
                 await new Promise<void>((r) => setTimeout(r, delay));
                 continue;
             }
             throw err;
         }
     }
-    throw new Error("callGemini: exhausted retries");
+    throw new Error("callGroq: exhausted retries");
 }
 
 interface VoiceStyle {
@@ -96,7 +101,7 @@ function buildPrompt(
         : "";
 
     const inputDescription = isImage
-        ? "The founder sent an image. Analyze what you see — data, context, insights, and emotion. Transform it into 3 LinkedIn post variations."
+        ? "The founder shared an image with context below. Transform the context into 3 LinkedIn post variations."
         : `Transform this voice memo transcript into 3 LinkedIn post variations:\n\n${transcript}`;
 
     return `LinkedIn ghostwriter for founders. No jargon, no hashtags, no fluff. Voice DNA overrides everything.${toneClause}${formatClause}${signatureClause}${contextBlock}${dnaBlock}${forbiddenBlock}
@@ -136,48 +141,20 @@ export async function processTranscript(
         variations = MOCK_VARIATIONS;
     } else {
         // ─── PREMIUM UPGRADE (Anthropic — adaptive thinking, superior quality) ───
-        // const userContent = imageUrl
-        //     ? [
-        //           { type: "image" as const, source: { type: "url" as const, url: imageUrl } },
-        //           { type: "text" as const, text: buildPrompt(voiceStyle, transcript, voiceDna, contextVault, true) },
-        //       ]
-        //     : buildPrompt(voiceStyle, transcript, voiceDna, contextVault);
-        //
-        // const response = await anthropic.messages.create({
-        //     model: "claude-opus-4-6",
-        //     max_tokens: 2048,
-        //     thinking: { type: "adaptive" },
-        //     system: "You are a world-class LinkedIn ghostwriter.",
-        //     messages: [{ role: "user", content: userContent }],
-        // });
-        // const textBlock = response.content.find((b) => b.type === "text");
-        // if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Anthropic response");
-        // const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-        // variations = JSON.parse(jsonMatch?.[0] ?? textBlock.text) as PostVariations;
+        // const response = await anthropic.messages.create({ model: "claude-opus-4-6", ... });
         // ─────────────────────────────────────────────────────────────────────────
 
-        console.log("[processor] Processing with Gemini — userId:", userId, "imageUrl:", imageUrl ?? "none");
+        console.log("[processor] Processing with Groq — userId:", userId, "imageUrl:", imageUrl ?? "none");
 
-        const genai = getGenAI();
-        const contents: Parameters<typeof genai.models.generateContent>[0]["contents"] = imageUrl
-            ? [
-                  {
-                      role: "user" as const,
-                      parts: [
-                          { inlineData: { mimeType: "image/jpeg", data: await urlToBase64(imageUrl) } },
-                          { text: buildPrompt(voiceStyle, transcript, voiceDna, contextVault, true) },
-                      ],
-                  },
-              ]
-            : buildPrompt(voiceStyle, transcript, voiceDna, contextVault);
+        const prompt = buildPrompt(voiceStyle, transcript, voiceDna, contextVault, !!imageUrl);
 
         try {
-            const raw = await callGemini(contents);
+            const raw = await callGroq(prompt);
             const jsonMatch = raw.match(/\{[\s\S]*\}/);
             variations = JSON.parse(jsonMatch?.[0] ?? raw) as PostVariations;
-            console.log("[processor] Gemini response parsed successfully");
+            console.log("[processor] Groq response parsed successfully");
         } catch (err) {
-            console.error("[processor] Gemini failed after retries — saving raw transcript fallback:", err);
+            console.error("[processor] Groq failed after retries — saving raw transcript fallback:", err);
             const fallback = `[AI processing queued — edit this draft with your own words]\n\n${transcript}`;
             variations = { brutal: fallback, x_factor: fallback, deep_dive: fallback };
         }
@@ -248,28 +225,15 @@ export async function generateVariation(
         await new Promise<void>((resolve) => setTimeout(resolve, 2000));
         aiOutput = MOCK_VARIATIONS[variationType as keyof PostVariations] ?? MOCK_VARIATIONS.brutal;
     } else {
-        // ─── PREMIUM UPGRADE (Anthropic) ─────────────────────────────────────────
-        // const response = await anthropic.messages.create({
-        //     model: "claude-opus-4-6",
-        //     max_tokens: 1024,
-        //     thinking: { type: "adaptive" },
-        //     system: buildPrompt(voiceStyle, transcript, voiceDna, contextVault),
-        //     messages: [{ role: "user", content: `Rewrite as "${variationType}". Instruction: ${instruction}\n\nReturn only the plain post text — no JSON.` }],
-        // });
-        // const textBlock = response.content.find((b) => b.type === "text");
-        // if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Anthropic response");
-        // aiOutput = textBlock.text.trim();
-        // ─────────────────────────────────────────────────────────────────────────
-
-        console.log("[processor] generateVariation with Gemini — userId:", userId, "type:", variationType);
+        console.log("[processor] generateVariation with Groq — userId:", userId, "type:", variationType);
 
         const prompt = `${buildPrompt(voiceStyle, transcript, voiceDna, contextVault)}\n\nRewrite this transcript specifically as the "${variationType}" variation, applying this instruction: ${instruction}\n\nReturn ONLY the plain text of the post — no JSON, no labels.`;
 
         try {
-            aiOutput = (await callGemini(prompt)).trim();
+            aiOutput = (await callGroq(prompt)).trim();
             console.log("[processor] generateVariation succeeded");
         } catch (err) {
-            console.error("[processor] generateVariation Gemini failed:", err);
+            console.error("[processor] generateVariation Groq failed:", err);
             throw err;
         }
     }
@@ -290,10 +254,4 @@ export async function generateVariation(
     if (!newDraft || error) throw new Error("Failed to save variation draft");
 
     return { id: newDraft.id, aiOutput };
-}
-
-async function urlToBase64(url: string): Promise<string> {
-    const res = await fetch(url);
-    const buf = await res.arrayBuffer();
-    return Buffer.from(buf).toString("base64");
 }
