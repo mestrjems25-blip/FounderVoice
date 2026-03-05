@@ -130,26 +130,23 @@ export async function getConnectedPlatforms(userId: string): Promise<ConnectedPl
         const data = await res.json() as Record<string, unknown>;
         console.log("[social] user profile raw:", JSON.stringify(data).slice(0, 400));
 
-        // Format 1: { profile: { connected_platforms: ["x", "linkedin"] } }
-        const profile = data.profile as { connected_platforms?: string[] } | undefined;
-        if (Array.isArray(profile?.connected_platforms)) {
-            const conn = profile.connected_platforms;
-            return { x: conn.includes("x"), linkedin: conn.includes("linkedin") };
+        const profile = data.profile as {
+            platforms?: string[];
+            connected_platforms?: string[];
+            social_accounts?: Record<string, unknown>;
+        } | undefined;
+
+        // Prefer profile.platforms — Upload-Post returns ["x"] when X is connected.
+        const platformList = profile?.platforms ?? profile?.connected_platforms;
+        if (Array.isArray(platformList)) {
+            return { x: platformList.includes("x"), linkedin: platformList.includes("linkedin") };
         }
 
-        // Format 2: { social_accounts: { x: {...}, linkedin: {...} } }
-        const accounts = data.social_accounts as Record<string, unknown> | undefined;
-        if (accounts && typeof accounts === "object") {
-            return {
-                x: accounts["x"] != null && accounts["x"] !== false,
-                linkedin: accounts["linkedin"] != null && accounts["linkedin"] !== false,
-            };
-        }
-
-        // Format 3: top-level connected_platforms array
-        if (Array.isArray(data.connected_platforms)) {
-            const conn = data.connected_platforms as string[];
-            return { x: conn.includes("x"), linkedin: conn.includes("linkedin") };
+        // Fallback: profile.social_accounts — non-empty object = connected.
+        const sa = profile?.social_accounts ?? (data.social_accounts as Record<string, unknown> | undefined);
+        if (sa && typeof sa === "object") {
+            const isObj = (v: unknown) => v != null && v !== "" && v !== false;
+            return { x: isObj(sa["x"]), linkedin: isObj(sa["linkedin"]) };
         }
 
         return { x: false, linkedin: false };
