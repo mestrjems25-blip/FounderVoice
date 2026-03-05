@@ -89,6 +89,7 @@ export function SettingsClient({
     const [socialToast, setSocialToast] = useState<"connected" | "error" | undefined>(socialStatus);
     const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const focusRef = useRef<(() => void) | null>(null);
     const [confirmDisconnect, setConfirmDisconnect] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmWipe, setConfirmWipe] = useState(false);
@@ -98,6 +99,10 @@ export function SettingsClient({
         if (pollRef.current) {
             clearInterval(pollRef.current);
             pollRef.current = null;
+        }
+        if (focusRef.current) {
+            window.removeEventListener("focus", focusRef.current);
+            focusRef.current = null;
         }
     }
 
@@ -138,20 +143,8 @@ export function SettingsClient({
             return;
         }
 
-        // Poll Upload-Post every 5s while waiting for the user to finish OAuth.
-        // Stops when connected, when the popup closes, or after 2 minutes.
-        const deadline = Date.now() + 2 * 60 * 1000;
-        pollRef.current = setInterval(async () => {
-            // Auto-stop if the popup was closed without connecting
-            if (popup.closed && Date.now() > deadline - 115000) {
-                clearPoll();
-                setConnectingPlatform(null);
-            }
-            if (Date.now() > deadline) {
-                clearPoll();
-                setConnectingPlatform(null);
-                return;
-            }
+        // Returns true if we detected a connection and cleaned up.
+        async function syncAndCheck(popupClosed: boolean): Promise<boolean> {
             const status = await refreshSocialStatus();
             if (status.linkedin) setLinkedinConnected(true);
             if (status.x) setXConnected(true);
@@ -159,10 +152,30 @@ export function SettingsClient({
                 clearPoll();
                 setConnectingPlatform(null);
                 setSocialToast("connected");
-            } else if (popup.closed) {
+                return true;
+            }
+            if (popupClosed) {
                 clearPoll();
                 setConnectingPlatform(null);
             }
+            return false;
+        }
+
+        // When the user tabs back from the OAuth popup, check immediately.
+        const onFocus = () => {
+            setTimeout(() => syncAndCheck(popup.closed), 800);
+        };
+        focusRef.current = onFocus;
+        window.addEventListener("focus", onFocus);
+
+        const deadline = Date.now() + 2 * 60 * 1000;
+        pollRef.current = setInterval(async () => {
+            if (Date.now() > deadline) {
+                clearPoll();
+                setConnectingPlatform(null);
+                return;
+            }
+            await syncAndCheck(popup.closed);
         }, 5000);
     }
 

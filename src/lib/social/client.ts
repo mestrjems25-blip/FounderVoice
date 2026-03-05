@@ -125,13 +125,34 @@ export async function getConnectedPlatforms(userId: string): Promise<ConnectedPl
         const res = await fetch(`${BASE}/uploadposts/users/${username}`, {
             headers: { Authorization: `${resolvedScheme ?? "ApiKey"} ${apiKey()}` },
         });
+        console.log("[social] getConnectedPlatforms:", username, "→", res.status);
         if (!res.ok) return { x: false, linkedin: false };
-        const data = await res.json() as { profile?: { connected_platforms?: string[] } };
-        const connected = data.profile?.connected_platforms ?? [];
-        return {
-            x: connected.includes("x"),
-            linkedin: connected.includes("linkedin"),
-        };
+        const data = await res.json() as Record<string, unknown>;
+        console.log("[social] user profile raw:", JSON.stringify(data).slice(0, 400));
+
+        // Format 1: { profile: { connected_platforms: ["x", "linkedin"] } }
+        const profile = data.profile as { connected_platforms?: string[] } | undefined;
+        if (Array.isArray(profile?.connected_platforms)) {
+            const conn = profile.connected_platforms;
+            return { x: conn.includes("x"), linkedin: conn.includes("linkedin") };
+        }
+
+        // Format 2: { social_accounts: { x: {...}, linkedin: {...} } }
+        const accounts = data.social_accounts as Record<string, unknown> | undefined;
+        if (accounts && typeof accounts === "object") {
+            return {
+                x: accounts["x"] != null && accounts["x"] !== false,
+                linkedin: accounts["linkedin"] != null && accounts["linkedin"] !== false,
+            };
+        }
+
+        // Format 3: top-level connected_platforms array
+        if (Array.isArray(data.connected_platforms)) {
+            const conn = data.connected_platforms as string[];
+            return { x: conn.includes("x"), linkedin: conn.includes("linkedin") };
+        }
+
+        return { x: false, linkedin: false };
     } catch {
         return { x: false, linkedin: false };
     }
