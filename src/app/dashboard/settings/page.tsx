@@ -46,6 +46,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             waLink={waLink}
             linkedinConnected={connectedPlatforms.linkedin}
             xConnected={connectedPlatforms.x}
+            xHandle={connectedPlatforms.xHandle}
+            linkedinHandle={connectedPlatforms.linkedinHandle}
             socialStatus={socialParam === "connected" ? "connected" : socialParam === "error" ? "error" : undefined}
         />
     );

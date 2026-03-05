@@ -67,6 +67,8 @@ interface Props {
     waLink: string;
     linkedinConnected: boolean;
     xConnected: boolean;
+    xHandle?: string;
+    linkedinHandle?: string;
     socialStatus?: "connected" | "error";
 }
 
@@ -77,6 +79,8 @@ export function SettingsClient({
     waLink: initialWaLink,
     linkedinConnected: initialLinkedin,
     xConnected: initialX,
+    xHandle: initialXHandle,
+    linkedinHandle: initialLinkedinHandle,
     socialStatus,
 }: Props) {
     const [whatsapp, setWhatsapp] = useState(initialWhatsapp);
@@ -86,6 +90,8 @@ export function SettingsClient({
     const [token, setToken] = useState(initialToken);
     const [linkedinConnected, setLinkedinConnected] = useState(initialLinkedin);
     const [xConnected, setXConnected] = useState(initialX);
+    const [xHandle, setXHandle] = useState(initialXHandle);
+    const [linkedinHandle, setLinkedinHandle] = useState(initialLinkedinHandle);
     const [socialToast, setSocialToast] = useState<"connected" | "error" | undefined>(socialStatus);
     const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -146,8 +152,8 @@ export function SettingsClient({
         // Returns true if we detected a connection and cleaned up.
         async function syncAndCheck(popupClosed: boolean): Promise<boolean> {
             const status = await refreshSocialStatus();
-            if (status.linkedin) setLinkedinConnected(true);
-            if (status.x) setXConnected(true);
+            if (status.linkedin) { setLinkedinConnected(true); if (status.linkedinHandle) setLinkedinHandle(status.linkedinHandle); }
+            if (status.x) { setXConnected(true); if (status.xHandle) setXHandle(status.xHandle); }
             if (status.linkedin || status.x) {
                 clearPoll();
                 setConnectingPlatform(null);
@@ -367,10 +373,10 @@ export function SettingsClient({
 
                 {(
                     [
-                        { key: "linkedin", label: "LinkedIn", description: "Publish drafts directly to your LinkedIn profile.", isConnected: linkedinConnected },
-                        { key: "x", label: "X (Twitter)", description: "Publish threads and posts directly to X.", isConnected: xConnected },
+                        { key: "linkedin", label: "LinkedIn", description: "Publish drafts directly to your LinkedIn profile.", isConnected: linkedinConnected, handle: linkedinHandle },
+                        { key: "x", label: "X (Twitter)", description: "Publish threads and posts directly to X.", isConnected: xConnected, handle: xHandle },
                     ] as const
-                ).map(({ key, label, description, isConnected }, i, arr) => (
+                ).map(({ key, label, description, isConnected, handle }, i, arr) => (
                     <div
                         key={key}
                         className={`flex items-center justify-between py-3 ${i < arr.length - 1 ? "border-b border-white/5" : ""}`}
@@ -381,7 +387,7 @@ export function SettingsClient({
                                 {isConnected && (
                                     <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
                                         <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                        Connected
+                                        {handle ? `@${handle}` : "Connected"}
                                     </span>
                                 )}
                             </div>

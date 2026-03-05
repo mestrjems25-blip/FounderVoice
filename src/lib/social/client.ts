@@ -7,6 +7,8 @@ export type SocialPlatform = "x" | "linkedin";
 export interface ConnectedPlatforms {
     x: boolean;
     linkedin: boolean;
+    xHandle?: string;
+    linkedinHandle?: string;
 }
 
 export interface SocialPost {
@@ -133,20 +135,38 @@ export async function getConnectedPlatforms(userId: string): Promise<ConnectedPl
         const profile = data.profile as {
             platforms?: string[];
             connected_platforms?: string[];
-            social_accounts?: Record<string, unknown>;
+            social_accounts?: Record<string, { handle?: string } | string | null>;
         } | undefined;
+
+        type SocialAccountMap = Record<string, { handle?: string } | string | null>;
+        const sa: SocialAccountMap | undefined = profile?.social_accounts ?? (data.social_accounts as SocialAccountMap | undefined);
+        const getHandle = (key: string): string | undefined => {
+            const acc = sa?.[key];
+            return acc && typeof acc === "object" ? acc.handle : undefined;
+        };
+        const xHandle = getHandle("x");
+        const linkedinHandle = getHandle("linkedin");
 
         // Prefer profile.platforms — Upload-Post returns ["x"] when X is connected.
         const platformList = profile?.platforms ?? profile?.connected_platforms;
         if (Array.isArray(platformList)) {
-            return { x: platformList.includes("x"), linkedin: platformList.includes("linkedin") };
+            return {
+                x: platformList.includes("x"),
+                linkedin: platformList.includes("linkedin"),
+                xHandle,
+                linkedinHandle,
+            };
         }
 
         // Fallback: profile.social_accounts — non-empty object = connected.
-        const sa = profile?.social_accounts ?? (data.social_accounts as Record<string, unknown> | undefined);
         if (sa && typeof sa === "object") {
             const isObj = (v: unknown) => v != null && v !== "" && v !== false;
-            return { x: isObj(sa["x"]), linkedin: isObj(sa["linkedin"]) };
+            return {
+                x: isObj(sa["x"]),
+                linkedin: isObj(sa["linkedin"]),
+                xHandle,
+                linkedinHandle,
+            };
         }
 
         return { x: false, linkedin: false };

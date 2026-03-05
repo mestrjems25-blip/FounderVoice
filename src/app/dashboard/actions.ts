@@ -212,7 +212,7 @@ export async function disconnectWhatsApp(): Promise<void> {
     revalidatePath("/dashboard/settings");
 }
 
-export async function refreshSocialStatus(): Promise<{ linkedin: boolean; x: boolean }> {
+export async function refreshSocialStatus(): Promise<{ linkedin: boolean; x: boolean; xHandle?: string; linkedinHandle?: string }> {
     const supabase = await createSessionClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user || !process.env.UPLOAD_POST_API_KEY) return { linkedin: false, x: false };
