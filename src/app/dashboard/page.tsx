@@ -29,8 +29,6 @@ export default async function DraftsPage() {
 
     const socialConnected = connectedPlatforms.x || connectedPlatforms.linkedin;
 
-    console.log(`[dashboard] user=${user.id} drafts=${drafts?.length ?? 0} social=${JSON.stringify(connectedPlatforms)} error=${draftsError?.message ?? "none"}`);
-
     return (
         <>
             <QuickInput />
