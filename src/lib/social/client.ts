@@ -31,7 +31,6 @@ export type AnalyticsResult = Partial<Record<SocialPlatform, PlatformAnalytics>>
 function apiKey(): string {
     const key = process.env.UPLOAD_POST_API_KEY?.trim();
     if (!key) throw new Error("[social] UPLOAD_POST_API_KEY not set");
-    console.log("[social] key prefix:", key.slice(0, 7), "| length:", key.length);
     return key;
 }
 
@@ -127,10 +126,8 @@ export async function getConnectedPlatforms(userId: string): Promise<ConnectedPl
         const res = await fetch(`${BASE}/uploadposts/users/${username}`, {
             headers: { Authorization: `${resolvedScheme ?? "ApiKey"} ${apiKey()}` },
         });
-        console.log("[social] getConnectedPlatforms:", username, "→", res.status);
         if (!res.ok) return { x: false, linkedin: false };
         const data = await res.json() as Record<string, unknown>;
-        console.log("[social] user profile raw:", JSON.stringify(data).slice(0, 400));
 
         const profile = data.profile as {
             platforms?: string[];
