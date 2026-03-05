@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { createSessionClient } from "@/lib/supabase/session";
 import { createServerClient } from "@/lib/supabase/server";
-import { getConnectedPlatforms } from "@/lib/social/client";
+import { getConnectedPlatforms, type ConnectedPlatforms } from "@/lib/social/client";
 import { SettingsClient } from "./settings-client";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ social?: string }> }) {
@@ -34,7 +34,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     const waNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "14155238886").replace(/\D/g, "");
     const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(`Verify my account: ${verificationToken}`)}`;
 
-    const connectedPlatforms = process.env.UPLOAD_POST_API_KEY
+    const connectedPlatforms: ConnectedPlatforms = process.env.UPLOAD_POST_API_KEY
         ? await getConnectedPlatforms(user.id).catch(() => ({ x: false, linkedin: false }))
         : { x: false, linkedin: false };
 
